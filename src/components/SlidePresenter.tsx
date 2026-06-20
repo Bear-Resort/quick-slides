@@ -4,6 +4,7 @@ import { ScaledSlideFrame } from "@/components/ScaledSlideFrame";
 import { SlideView } from "@/components/SlideView";
 import { splitSlides } from "@/lib/slides";
 import { getSlideThemeAttributes, type SlideThemeId } from "@/lib/slideThemes";
+import { parseSlide } from "@/lib/slideLayout";
 import { cn } from "@/lib/utils";
 
 type SlidePresenterProps = {
@@ -97,6 +98,7 @@ export function SlidePresenter({
 
   const slide = slides[index] ?? "";
   const themeAttributes = getSlideThemeAttributes(theme);
+  const layout = parseSlide(slide).layout;
 
   return (
     <div
@@ -108,7 +110,12 @@ export function SlidePresenter({
       style={themeAttributes.style}
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-6 py-6 sm:px-10">
-        <ScaledSlideFrame className="mx-auto h-full min-h-0 max-w-[min(100%,calc((100dvh-12rem)*16/9))]">
+        <ScaledSlideFrame
+          className="mx-auto h-full min-h-0 max-w-[min(100%,calc((100dvh-12rem)*16/9))]"
+          theme={theme}
+          slideIndex={index}
+          layout={layout}
+        >
           <SlideView markdown={slide} />
         </ScaledSlideFrame>
       </div>

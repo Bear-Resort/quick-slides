@@ -1,13 +1,30 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { SlideCanvasContent } from "@/components/SlideCanvasContent";
 import { SLIDE_HEIGHT, SLIDE_WIDTH } from "@/lib/slideCanvas";
+import type { SlideLayoutType } from "@/lib/slideLayout";
+import type { SlideThemeId } from "@/lib/slideThemes";
 import { cn } from "@/lib/utils";
 
 type ScaledSlideFrameProps = {
   children: ReactNode;
   className?: string;
+  theme?: SlideThemeId;
+  slideIndex?: number;
+  layout?: SlideLayoutType;
 };
 
-export function ScaledSlideFrame({ children, className }: ScaledSlideFrameProps) {
+export function ScaledSlideFrame({
+  children,
+  className,
+  theme = "regular",
+  slideIndex = 0,
+  layout = "content",
+}: ScaledSlideFrameProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [transform, setTransform] = useState("scale(1)");
 
@@ -43,7 +60,7 @@ export function ScaledSlideFrame({ children, className }: ScaledSlideFrameProps)
       className={cn("relative h-full w-full overflow-hidden", className)}
     >
       <div
-        className="slide-canvas absolute left-0 top-0 overflow-hidden bg-card"
+        className="absolute left-0 top-0"
         style={{
           width: SLIDE_WIDTH,
           height: SLIDE_HEIGHT,
@@ -51,7 +68,15 @@ export function ScaledSlideFrame({ children, className }: ScaledSlideFrameProps)
           transformOrigin: "top left",
         }}
       >
-        {children}
+        <SlideCanvasContent
+          theme={theme}
+          slideIndex={slideIndex}
+          layout={layout}
+          className="h-full w-full"
+          style={{ width: SLIDE_WIDTH, height: SLIDE_HEIGHT }}
+        >
+          {children}
+        </SlideCanvasContent>
       </div>
     </div>
   );

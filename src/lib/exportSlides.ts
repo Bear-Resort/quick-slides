@@ -3,9 +3,11 @@ import { createRoot } from "react-dom/client";
 import { ExportSlidePage, SLIDE_HEIGHT, SLIDE_WIDTH } from "@/components/ExportSlidePage";
 import {
   getCaptureBackgroundColor,
+  prepareKatexForCapture,
   prepareSlideForCapture,
   waitForExportReady,
 } from "@/lib/exportCapture";
+import { replaceMathEquationsForCapture } from "@/lib/exportMathJax";
 import { getLanguage, type Language } from "@/lib/language";
 import { presenterUiCopy } from "@/lib/presenterUi";
 import { splitSlides } from "@/lib/slides";
@@ -508,9 +510,9 @@ async function renderSlidesForExport(
   const mount = document.createElement("div");
   mount.id = EXPORT_MOUNT_ID;
   mount.className = colorTheme === "night" ? "night" : "";
-  // Keep off-screen but visible — html2canvas cannot rasterize visibility:hidden trees.
+  // Off-screen so the live preview never shows through during capture.
   mount.style.cssText =
-    "position:fixed;left:-10000px;top:0;width:1280px;height:720px;pointer-events:none;opacity:1;overflow:visible;";
+    "position:fixed;left:-10000px;top:0;width:1280px;height:720px;pointer-events:none;overflow:hidden;";
   document.body.appendChild(mount);
 
   const root = createRoot(mount);
@@ -521,6 +523,7 @@ async function renderSlidesForExport(
         createElement(ExportSlidePage, {
           markdown: slides[i] ?? "",
           theme,
+          slideIndex: i,
         }),
       );
       await waitForRender(mount);
@@ -550,15 +553,7 @@ export async function downloadSlidesPdf(
   theme: SlideThemeId,
   colorTheme: Theme,
 ): Promise<void> {
-  const [{ jsPDF }, html2canvasModule] = await Promise.all([
-    import("jspdf"),
-    import("html2canvas-pro"),
-  ]);
-
-  const html2canvas =
-    html2canvasModule.default ??
-    html2canvasModule.html2canvas ??
-    html2canvasModule;
+  const { jsPDF } = await import("jspdf");
 
   const pdf = new jsPDF({
     orientation: "landscape",
@@ -568,33 +563,65 @@ export async function downloadSlidesPdf(
   });
 
   await renderSlidesForExport(markdown, theme, colorTheme, async (slideEl, index) => {
-    const captureTarget = prepareSlideForCapture(slideEl);
-    const backgroundColor = getCaptureBackgroundColor(captureTarget);
+    const pageRoot = slideEl.classList.contains("export-slide-page")
+      ? slideEl
+      : slideEl.querySelector<HTMLElement>(".export-slide-page") ?? slideEl;
+    pageRoot.classList.add("export-pdf-capture");
+    const captureRoot = pageRoot;
+    const captureScope = pageRoot;
 
-    const canvas = await html2canvas(captureTarget, {
-      width: SLIDE_WIDTH,
-      height: SLIDE_HEIGHT,
-      scale: 2,
-      useCORS: true,
-      backgroundColor,
-      logging: false,
-    });
+    prepareSlideForCapture(slideEl);
+    prepareKatexForCapture(captureScope);
+    await replaceMathEquationsForCapture(captureScope);
+    prepareKatexForCapture(captureScope);
+    await waitForExportReady(captureScope);
+
+    const slideCanvas = pageRoot.querySelector<HTMLElement>(".slide-canvas");
+    if (!(slideCanvas instanceof HTMLElement)) {
+      throw new Error("Slide canvas not found for PDF export");
+    }
 
     if (index > 0) {
       pdf.addPage([SLIDE_WIDTH, SLIDE_HEIGHT], "landscape");
     }
 
-    pdf.addImage(
-      canvas.toDataURL("image/png"),
-      "PNG",
-      0,
-      0,
-      SLIDE_WIDTH,
-      SLIDE_HEIGHT,
-    );
+    await rasterizeSlideToPdf(pdf, captureRoot, slideCanvas);
   });
 
   pdf.save("quick-slides.pdf");
+}
+
+async function rasterizeSlideToPdf(
+  pdf: import("jspdf").jsPDF,
+  captureRoot: HTMLElement,
+  slideCanvas: HTMLElement,
+): Promise<void> {
+  const html2canvasModule = await import("html2canvas-pro");
+  const html2canvas =
+    html2canvasModule.default ??
+    html2canvasModule.html2canvas ??
+    html2canvasModule;
+
+  const backgroundColor = getCaptureBackgroundColor(slideCanvas);
+
+  const canvas = await html2canvas(captureRoot, {
+    width: SLIDE_WIDTH,
+    height: SLIDE_HEIGHT,
+    scale: 2,
+    useCORS: true,
+    backgroundColor,
+    foreignObjectRendering: false,
+    logging: false,
+  });
+
+  pdf.addImage(
+    canvas.toDataURL("image/png"),
+    "PNG",
+    0,
+    0,
+    SLIDE_WIDTH,
+    SLIDE_HEIGHT,
+  );
 }
 
 function buildHtmlDocument(

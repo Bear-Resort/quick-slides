@@ -72,13 +72,44 @@
     color: inherit;
   }
 
-  /* Section labels and action buttons in the preview column */
-  .home-split-slides .text-muted-foreground {
+  /*
+   * Safari drops color-mix(in oklch, …) on panel chrome, so labels inherit bar
+   * color. Scope to direct panel children only — not slide markdown content.
+   */
+  .home-split-slides > .shrink-0 .text-muted-foreground {
     color: #71717a;
   }
 
-  .night .home-split-slides .text-muted-foreground {
+  .night .home-split-slides > .shrink-0 .text-muted-foreground {
     color: #a1a1aa;
+  }
+
+  /* ## subtitle under # on title slides — oklch muted tokens may not apply. */
+  .slide-title-body > h2.text-muted-foreground {
+    color: #71717a;
+  }
+
+  .night .slide-title-body > h2.text-muted-foreground {
+    color: #a1a1aa;
+  }
+
+  /* ## subtitle-only slides: restore theme title colors over text-muted-foreground. */
+  .slide-theme-regular .slide-primary-heading.text-muted-foreground {
+    color: #71717a;
+  }
+
+  .night .slide-theme-regular .slide-primary-heading.text-muted-foreground {
+    color: #a1a1aa;
+  }
+
+  .slide-theme-tinted .slide-primary-heading.text-muted-foreground {
+    color: #fafafa;
+    color: var(--slide-theme-title-text);
+  }
+
+  .night .slide-theme-tinted .slide-primary-heading.text-muted-foreground {
+    color: #18181b;
+    color: var(--slide-theme-title-text);
   }
 
   .home-split-slides .slide-action-present {

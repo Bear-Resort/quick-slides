@@ -112,6 +112,12 @@
   color: var(--foreground);
 }
 
+/* KaTeX expects line-height 1.2; slide body line-height breaks glyph placement in html2canvas. */
+.markdown-preview .katex,
+.markdown-preview .katex * {
+  line-height: 1.2;
+}
+
 .markdown-preview .katex-display {
   display: block;
   width: 100%;
@@ -251,6 +257,58 @@
   list-style-type: disc;
 }
 
+/* PDF export: html2canvas renders native markers smaller than the live preview. */
+.export-slide-page.export-pdf-capture .slide-list-bulleted {
+  list-style: none;
+}
+
+.export-slide-page.export-pdf-capture .slide-list-bulleted li {
+  position: relative;
+  padding-left: 0.35rem;
+}
+
+.export-slide-page.export-pdf-capture .slide-list-bulleted li::before {
+  content: "•";
+  position: absolute;
+  left: -1.35rem;
+  font-size: 1.35em;
+  line-height: 1.2;
+}
+
+.export-slide-page.export-pdf-capture .slide-list-ordered {
+  list-style: none;
+  counter-reset: export-slide-ol;
+}
+
+.export-slide-page.export-pdf-capture .slide-list-ordered li {
+  position: relative;
+  padding-left: 0.35rem;
+  counter-increment: export-slide-ol;
+}
+
+.export-slide-page.export-pdf-capture .slide-list-ordered li::before {
+  content: counter(export-slide-ol) ".";
+  position: absolute;
+  left: -1.75rem;
+  font-size: 1.1em;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.export-slide-page.export-pdf-capture .markdown-preview li:has(> .katex-display:only-child)::before,
+.export-slide-page.export-pdf-capture
+  .markdown-preview
+  li:has(> p:only-child > .katex-display:only-child)::before {
+  content: none;
+}
+
+.export-slide-page.export-pdf-capture .markdown-preview li:has(> .katex-display:only-child),
+.export-slide-page.export-pdf-capture
+  .markdown-preview
+  li:has(> p:only-child > .katex-display:only-child) {
+  padding-left: 0;
+}
+
 .slide-content :is(ol, ul) {
   width: 100%;
   max-width: 100%;
@@ -378,12 +436,50 @@
   --slide-theme-hue: 145;
 }
 
-.slide-theme-yellow {
+.slide-theme-purple {
+  --slide-theme-hue: 300;
+}
+
+.slide-theme-bear-academy {
   --slide-theme-hue: 92;
 }
 
-.slide-theme-purple {
-  --slide-theme-hue: 300;
+.slide-theme-the-beauties {
+  --slide-theme-hue: 350;
+}
+
+:is(.slide-theme-bear-academy, .slide-theme-the-beauties) .slide-sticker-decoration {
+  position: absolute;
+  width: min(22%, 190px);
+  height: min(22%, 190px);
+  background-size: contain;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  z-index: 1;
+}
+
+:is(.slide-theme-bear-academy, .slide-theme-the-beauties) .slide-sticker-decoration-br {
+  bottom: 0;
+  right: 0;
+  background-position: bottom right;
+}
+
+:is(.slide-theme-bear-academy, .slide-theme-the-beauties) .slide-sticker-decoration-bl {
+  bottom: 0;
+  left: 0;
+  background-position: bottom left;
+}
+
+:is(.slide-theme-bear-academy, .slide-theme-the-beauties) .slide-sticker-decoration-tr {
+  top: 0;
+  right: 0;
+  background-position: top right;
+}
+
+:is(.slide-theme-bear-academy, .slide-theme-the-beauties) .slide-sticker-decoration-tl {
+  top: 0;
+  left: 0;
+  background-position: top left;
 }
 
 .slide-theme-tinted.slide-theme-gray {

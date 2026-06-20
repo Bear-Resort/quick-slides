@@ -40,7 +40,7 @@ export function SlideImagePanel({ image, variant = "default" }: SlideImageProps)
   return (
     <div
       className={cn(
-        "relative flex min-h-0 w-full items-center justify-center",
+        "slide-image-panel relative flex min-h-0 w-full items-center justify-center",
         isHero ? "h-full max-h-full" : "h-full",
       )}
     >

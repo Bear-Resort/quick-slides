@@ -1,4 +1,6 @@
 import type { CSSProperties } from "react";
+import { BEAR_ACADEMY_ASSETS } from "@/lib/bearAcademyAssets";
+import { THE_BEAUTIES_ASSETS } from "@/lib/theBeautiesAssets";
 import { cn } from "@/lib/utils";
 
 export type SlideThemeId =
@@ -7,8 +9,9 @@ export type SlideThemeId =
   | "blue"
   | "red"
   | "green"
-  | "yellow"
-  | "purple";
+  | "purple"
+  | "bear-academy"
+  | "the-beauties";
 
 export type PresetSlideThemeId = Exclude<SlideThemeId, "regular">;
 
@@ -16,6 +19,9 @@ export type SlideTheme = {
   id: SlideThemeId;
   name: { en: string; zh: string };
   swatch: string;
+  /** Lighter swatch fill when an icon is shown on top. */
+  iconSwatch?: string;
+  iconUrl?: string;
 };
 
 export const SLIDE_THEMES: SlideTheme[] = [
@@ -45,14 +51,23 @@ export const SLIDE_THEMES: SlideTheme[] = [
     swatch: "#22c55e",
   },
   {
-    id: "yellow",
-    name: { en: "Yellow", zh: "黄色" },
-    swatch: "#eab308",
-  },
-  {
     id: "purple",
     name: { en: "Purple", zh: "紫色" },
     swatch: "#a855f7",
+  },
+  {
+    id: "bear-academy",
+    name: { en: "Bear Academy", zh: "小熊學園" },
+    swatch: "#eab308",
+    iconSwatch: "#fefce8",
+    iconUrl: BEAR_ACADEMY_ASSETS.icon,
+  },
+  {
+    id: "the-beauties",
+    name: { en: "The Beauties", zh: "美少女们" },
+    swatch: "#ec4899",
+    iconSwatch: "#fdf2f8",
+    iconUrl: THE_BEAUTIES_ASSETS.icon,
   },
 ];
 
@@ -60,8 +75,9 @@ export const TINT_THEME_HUES: Record<Exclude<PresetSlideThemeId, "gray">, number
   blue: 250,
   red: 27,
   green: 145,
-  yellow: 92,
   purple: 300,
+  "bear-academy": 92,
+  "the-beauties": 350,
 };
 
 export function isTintedSlideTheme(themeId: SlideThemeId): boolean {

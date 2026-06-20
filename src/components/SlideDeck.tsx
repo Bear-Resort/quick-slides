@@ -4,6 +4,7 @@ import { LocateIconButton } from "@/components/LocateIconButton";
 import { ScaledSlideFrame } from "@/components/ScaledSlideFrame";
 import { SlideView } from "@/components/SlideView";
 import { getSlideThemeAttributes, type SlideThemeId } from "@/lib/slideThemes";
+import { parseSlide } from "@/lib/slideLayout";
 import { splitSlides } from "@/lib/slides";
 import { useLanguage } from "@/lib/useLanguage";
 import { cn } from "@/lib/utils";
@@ -46,7 +47,10 @@ export const SlideDeck = forwardRef<SlideDeckHandle, SlideDeckProps>(
         className={cn("flex flex-col gap-6", themeAttributes.className)}
         style={themeAttributes.style}
       >
-        {slides.map((slide, index) => (
+        {slides.map((slide, index) => {
+          const layout = parseSlide(slide).layout;
+
+          return (
           <article
             key={index}
             ref={(node) => {
@@ -65,12 +69,13 @@ export const SlideDeck = forwardRef<SlideDeckHandle, SlideDeckProps>(
               />
             </div>
             <div className="aspect-video w-full">
-              <ScaledSlideFrame>
+              <ScaledSlideFrame theme={theme} slideIndex={index} layout={layout}>
                 <SlideView markdown={slide} />
               </ScaledSlideFrame>
             </div>
           </article>
-        ))}
+          );
+        })}
       </div>
     );
   },
