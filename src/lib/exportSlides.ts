@@ -5,6 +5,7 @@ import {
   getCaptureBackgroundColor,
   prepareKatexForCapture,
   prepareSlideForCapture,
+  waitForCaptureImages,
   waitForExportReady,
 } from "@/lib/exportCapture";
 import { replaceMathEquationsForCapture } from "@/lib/exportMathJax";
@@ -575,6 +576,7 @@ export async function downloadSlidesPdf(
     await replaceMathEquationsForCapture(captureScope);
     prepareKatexForCapture(captureScope);
     await waitForExportReady(captureScope);
+    await waitForCaptureImages(captureScope);
 
     const slideCanvas = pageRoot.querySelector<HTMLElement>(".slide-canvas");
     if (!(slideCanvas instanceof HTMLElement)) {

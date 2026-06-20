@@ -70,6 +70,35 @@ The app is deployed to **GitHub Pages** on every push to `main` via [`.github/wo
 
 The production build sets `GITHUB_PAGES=true` so assets are served under the `/quick-slides/` base path.
 
+## PDF export (how it works)
+
+PDF export runs **entirely in your browser** on the live site. GitHub Pages only hosts the static app; it does not generate PDFs on the server.
+
+When you click **Download → PDF**, the app:
+
+1. Renders each slide off-screen in the browser (same React components as the preview)
+2. Loads **MathJax** from jsDelivr CDN to rasterize equations for capture
+3. Screenshots each slide with **html2canvas-pro** and assembles a **jsPDF** file
+
+**What is bundled at build time (not read from your disk at export time):**
+
+- Theme sticker images from `themes/bear-academy/` and `themes/the-beauties/` → copied into `dist/assets/` by Vite
+- KaTeX fonts and app CSS/JS
+
+**What is fetched at export time over the network:**
+
+- MathJax (`cdn.jsdelivr.net`) — required for reliable equation rendering in PDFs
+- Any **external images** in your Markdown (must allow cross-origin access, or they may be missing from the PDF)
+
+There are **no local filesystem paths** involved on the deployed site. If you see errors mentioning `/themes/...` or missing files, that usually means an old build or a URL that was not bundled — redeploy from `main` after a fresh `pnpm build`.
+
+**Tips if PDF export fails on the live site:**
+
+- Use a normal browser tab (not an embedded preview with blocked network access)
+- Check the browser console for MathJax or CORS errors
+- Prefer HTTPS image URLs that allow cross-origin embedding
+- Sticker themes use large PNGs; export waits for them to load, but a slow connection may take a few seconds
+
 ## Tech stack
 
 React, Vite, TypeScript, Tailwind CSS, KaTeX, html2canvas-pro, jsPDF

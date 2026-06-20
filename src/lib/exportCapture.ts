@@ -150,6 +150,52 @@ function getExportPageRoot(root: HTMLElement): HTMLElement {
   return root.querySelector<HTMLElement>(".export-slide-page") ?? root;
 }
 
+function extractBackgroundImageUrl(backgroundImage: string): string | null {
+  const match = backgroundImage.match(/url\(["']?([^"')]+)["']?\)/);
+  return match?.[1] ?? null;
+}
+
+function preloadImage(src: string): Promise<void> {
+  if (!src || src.startsWith("data:")) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve();
+    img.onerror = () => resolve();
+    img.src = src;
+  });
+}
+
+/** Wait for slide images and CSS background images before html2canvas capture. */
+export async function waitForCaptureImages(root: ParentNode): Promise<void> {
+  const tasks: Promise<void>[] = [];
+  const backgroundUrls = new Set<string>();
+
+  for (const img of root.querySelectorAll("img")) {
+    if (img.complete && img.naturalWidth > 0) continue;
+    tasks.push(
+      new Promise((resolve) => {
+        img.addEventListener("load", () => resolve(), { once: true });
+        img.addEventListener("error", () => resolve(), { once: true });
+      }),
+    );
+  }
+
+  for (const element of root.querySelectorAll<HTMLElement>("*")) {
+    const url = extractBackgroundImageUrl(getComputedStyle(element).backgroundImage);
+    if (url) backgroundUrls.add(url);
+  }
+
+  for (const url of backgroundUrls) {
+    tasks.push(preloadImage(url));
+  }
+
+  await Promise.all(tasks);
+}
+
 /** Wait for fonts and KaTeX layout before export. */
 export async function waitForExportReady(root?: ParentNode): Promise<void> {
   await document.fonts.ready;
