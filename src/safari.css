@@ -1,0 +1,133 @@
+/*
+ * Safari-only compatibility fixes.
+ * `@supports (font: -apple-system-body)` matches Safari but not Chrome/Firefox.
+ */
+@supports (font: -apple-system-body) {
+  /* Flex fallback: Safari can ignore grid column rules on flex-sized containers. */
+  @media (min-width: 640px) {
+    .home-split-layout {
+      display: flex;
+      flex-direction: row;
+      flex: 1 1 0%;
+      min-height: 0;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .home-split-layout > section {
+      flex: 1 1 0%;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .home-split-editor {
+      border-bottom-width: 0;
+      border-right-width: 1px;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .help-example-pair {
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      gap: 0.75rem;
+    }
+
+    .help-example-pair > * {
+      flex: 1 1 0%;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .help-example-labels {
+      display: flex;
+      flex-direction: row;
+      gap: 0.75rem;
+    }
+
+    .help-example-labels > * {
+      flex: 1 1 0%;
+      min-width: 0;
+    }
+  }
+
+  /*
+   * Safari drops color-mix(in oklch, …) rules, so bar buttons inherit the bar
+   * color and become indistinguishable from labels.
+   */
+  .slide-frame-bar .slide-locate-btn,
+  .app-header-bar button.slide-locate-btn,
+  .app-header-bar .slide-locate-btn {
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background-color: rgba(255, 255, 255, 0.12);
+    color: inherit;
+  }
+
+  .slide-frame-bar .slide-locate-btn:hover,
+  .app-header-bar button.slide-locate-btn:hover,
+  .app-header-bar .slide-locate-btn:hover {
+    background-color: rgba(255, 255, 255, 0.22);
+    color: inherit;
+  }
+
+  /* Section labels and action buttons in the preview column */
+  .home-split-slides .text-muted-foreground {
+    color: #71717a;
+  }
+
+  .night .home-split-slides .text-muted-foreground {
+    color: #a1a1aa;
+  }
+
+  .home-split-slides .slide-action-present {
+    background-color: #18181b;
+    color: #fafafa;
+  }
+
+  .home-split-slides .slide-action-present:hover {
+    background-color: #27272a;
+  }
+
+  .night .home-split-slides .slide-action-present {
+    background-color: #e4e4e7;
+    color: #18181b;
+  }
+
+  .night .home-split-slides .slide-action-present:hover {
+    background-color: #d4d4d8;
+  }
+
+  .home-split-slides .slide-action-download {
+    border: 1px solid #d4d4d8;
+    background-color: #ffffff;
+    color: #18181b;
+  }
+
+  .home-split-slides .slide-action-download:hover {
+    background-color: #f4f4f5;
+  }
+
+  .night .home-split-slides .slide-action-download {
+    border-color: #3f3f46;
+    background-color: #18181b;
+    color: #fafafa;
+  }
+
+  .night .home-split-slides .slide-action-download:hover {
+    background-color: #27272a;
+  }
+
+  .html-scroll-area {
+    --scrollbar-track: rgba(113, 113, 122, 0.16);
+    --scrollbar-thumb: rgba(113, 113, 122, 0.42);
+    --scrollbar-thumb-hover: rgba(113, 113, 122, 0.58);
+  }
+
+  .night .html-scroll-area {
+    --scrollbar-track: rgba(161, 161, 170, 0.22);
+    --scrollbar-thumb: rgba(161, 161, 170, 0.5);
+    --scrollbar-thumb-hover: rgba(161, 161, 170, 0.66);
+  }
+}
