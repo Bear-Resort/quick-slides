@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { Home } from "@/pages/Home";
+import { Editor } from "@/pages/Editor";
+import { Library } from "@/pages/Library";
 
 function getRouterBasename() {
   const base = import.meta.env.BASE_URL;
@@ -11,7 +12,9 @@ function App() {
   return (
     <BrowserRouter basename={getRouterBasename()}>
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<Library />} />
+        <Route path="/edit" element={<Editor />} />
+        <Route path="/edit/:deckId" element={<Editor />} />
       </Routes>
     </BrowserRouter>
   );

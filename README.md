@@ -25,7 +25,7 @@ pnpm install
 pnpm dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Use **Load sample** in the header to try example slides.
+Open [http://localhost:5173](http://localhost:5173). The **library home** lists saved presentations (after you choose a folder). Use **Continue without saving** for a one-off session, or **Load sample** in the editor header.
 
 Build for production:
 
@@ -58,6 +58,36 @@ $$\\int_0^1 x^2 \\, dx = \\frac{1}{3}$$
 ```
 
 Put `---` on its own line between slides. Optional images use standard Markdown syntax: `![alt text](url)`.
+
+## Local library (Chrome, Edge, Safari desktop)
+
+Quick Slides can save presentations locally using the browser [File System API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API).
+
+1. On the library home, click **Use ~/qs-slides** (Chrome/Edge) or open the app (Safari/Firefox — library auto-initializes).
+   - **Chrome / Edge:** creates `~/qs-slides` in browser storage, or **Choose another folder** for a real disk location.
+   - **Safari / Firefox:** presentations save in browser-managed local storage automatically (OPFS). No disk folder picker.
+   - On return visits, Quick Slides reconnects and scans that folder automatically.
+2. Click **New presentation** — each deck is stored as its own subfolder.
+3. Edit in the browser; changes **autosave** (~800ms after you stop typing).
+4. Uploaded images are written to that deck's `images/` folder (not ephemeral browser storage).
+
+### On-disk layout
+
+```
+YourLibraryFolder/
+  my-talk-a1b2/
+    deck.md              # slide markdown
+    quick-slides.json    # title, theme, created/updated timestamps
+    images/
+      uuid.png           # images referenced from deck.md
+```
+
+- **Open** a deck from the library list (sorted by last opened).
+- **Delete** removes the deck's subfolder from your library folder.
+- **Rename** the title in the editor; the folder name stays stable.
+- **Export** (PDF/HTML) uses the presentation title as the download filename.
+
+Safari Private Browsing disables origin storage — use a normal window or **Continue without saving**. Firefox does not yet support the default library; use **Continue without saving** there.
 
 ## Theme setup
 

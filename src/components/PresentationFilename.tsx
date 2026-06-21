@@ -18,10 +18,23 @@ const copy = {
   },
 };
 
-export function PresentationFilename() {
+type PresentationFilenameProps = {
+  value?: string;
+  onChange?: (title: string) => void;
+  className?: string;
+};
+
+export function PresentationFilename({
+  value,
+  onChange,
+  className,
+}: PresentationFilenameProps) {
   const language = useLanguage();
   const t = copy[language];
-  const name = usePresentationFilename();
+  const storedName = usePresentationFilename();
+  const isControlled = value !== undefined && onChange !== undefined;
+  const name = isControlled ? value : storedName;
+
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -40,7 +53,11 @@ export function PresentationFilename() {
 
   const commit = () => {
     const next = normalizePresentationFilename(draft, language);
-    setPresentationFilename(next);
+    if (isControlled) {
+      onChange(next);
+    } else {
+      setPresentationFilename(next);
+    }
     setDraft(next);
     setEditing(false);
   };
@@ -72,6 +89,7 @@ export function PresentationFilename() {
           "w-full min-w-0 rounded-sm border border-transparent bg-transparent",
           "text-lg font-semibold text-foreground outline-none",
           "border-b border-primary/40 focus:border-primary",
+          className,
         )}
       />
     );
@@ -87,6 +105,7 @@ export function PresentationFilename() {
         "w-full min-w-0 truncate rounded-sm py-0.5 text-left text-lg font-semibold text-foreground",
         "transition-colors hover:text-foreground/80 focus-visible:outline-none",
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        className,
       )}
     >
       {name}

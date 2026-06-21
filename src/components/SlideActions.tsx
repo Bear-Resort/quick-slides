@@ -36,6 +36,8 @@ type SlideActionsProps = {
   markdown: string;
   theme: SlideThemeId;
   filename: string;
+  deckHandle?: FileSystemDirectoryHandle | null;
+  deckId?: string | null;
   onPresent: () => void;
 };
 
@@ -43,6 +45,8 @@ export function SlideActions({
   markdown,
   theme,
   filename,
+  deckHandle = null,
+  deckId = null,
   onPresent,
 }: SlideActionsProps) {
   const language = useLanguage();
@@ -53,7 +57,7 @@ export function SlideActions({
     if (exporting) return;
     setExporting("pdf");
     try {
-      await downloadSlidesPdf(markdown, theme, getTheme(), filename);
+      await downloadSlidesPdf(markdown, theme, getTheme(), filename, deckHandle, deckId);
     } catch (error) {
       console.error("PDF export failed:", error);
       window.alert(t.exportFailed);
@@ -66,7 +70,7 @@ export function SlideActions({
     if (exporting) return;
     setExporting("html");
     try {
-      await downloadSlidesHtml(markdown, theme, getTheme(), filename);
+      await downloadSlidesHtml(markdown, theme, getTheme(), filename, deckHandle, deckId);
     } catch (error) {
       console.error("HTML export failed:", error);
       window.alert(t.exportFailed);

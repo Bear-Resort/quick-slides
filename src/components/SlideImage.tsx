@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ImageIcon } from "lucide-react";
+import { useDeckImageResolver } from "@/context/DeckContext";
 import { cn } from "@/lib/utils";
-import { resolveEditorImageSrc } from "@/lib/editorImages";
+import { isDeckImagePath } from "@/lib/library/deckFormat";
+import { isEditorImageUrl, resolveEditorImageSrc } from "@/lib/editorImages";
 import { getSlideImageCaption, type SlideImage as SlideImageData } from "@/lib/slideLayout";
 
 type SlideImageProps = {
@@ -28,11 +30,48 @@ function ImagePlaceholder({
   );
 }
 
+function useResolvedSlideImageSrc(src: string): string {
+  const { resolveImageSrc } = useDeckImageResolver();
+  const [resolvedSrc, setResolvedSrc] = useState(() => {
+    if (isEditorImageUrl(src)) return resolveEditorImageSrc(src);
+    if (isDeckImagePath(src)) return "";
+    return src;
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      if (isEditorImageUrl(src)) {
+        setResolvedSrc(resolveEditorImageSrc(src));
+        return;
+      }
+      if (isDeckImagePath(src)) {
+        const url = await resolveImageSrc(src);
+        if (!cancelled) setResolvedSrc(url);
+        return;
+      }
+      if (!cancelled) setResolvedSrc(src);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [src, resolveImageSrc]);
+
+  return resolvedSrc;
+}
+
 export function SlideImagePanel({ image, variant = "default" }: SlideImageProps) {
-  const resolvedSrc = resolveEditorImageSrc(image.src);
+  const resolvedSrc = useResolvedSlideImageSrc(image.src);
   const hasSrc = Boolean(resolvedSrc);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setLoaded(false);
+    setFailed(false);
+  }, [resolvedSrc]);
 
   const showPlaceholder = !hasSrc || !loaded || failed;
   const isHero = variant === "hero";

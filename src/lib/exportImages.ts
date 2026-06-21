@@ -1,7 +1,14 @@
 import { isEditorImageUrl, resolveEditorImageSrc } from "@/lib/editorImages";
+import { isDeckImagePath } from "@/lib/library/deckFormat";
+import { readDeckImageBlob } from "@/lib/library/deckImages";
 import { extractBackgroundImageUrl } from "@/lib/exportCapture";
 
 const dataUrlCache = new Map<string, string>();
+
+export type ExportImageOptions = {
+  deckHandle?: FileSystemDirectoryHandle | null;
+  deckId?: string | null;
+};
 
 /** Max pixel dimension for embedded slide images (reduces HTML/PDF payload). */
 const MAX_EMBED_DIMENSION = 1920;
@@ -9,9 +16,14 @@ const EMBED_JPEG_QUALITY = 0.88;
 
 function resolveAbsoluteImageUrl(url: string): string {
   const trimmed = url.trim();
-  if (!trimmed || trimmed.startsWith("data:")) return trimmed;
+  if (!trimmed || trimmed.startsWith("data:") || trimmed.startsWith("blob:")) {
+    return trimmed;
+  }
   if (isEditorImageUrl(trimmed)) {
     return resolveEditorImageSrc(trimmed) || trimmed;
+  }
+  if (isDeckImagePath(trimmed)) {
+    return trimmed;
   }
   try {
     return new URL(trimmed, window.location.href).href;
@@ -86,20 +98,35 @@ async function compressBlobToDataUrl(blob: Blob): Promise<string> {
   }
 }
 
-async function fetchImageAsDataUrl(url: string): Promise<string> {
+async function fetchImageAsDataUrl(
+  url: string,
+  options?: ExportImageOptions,
+): Promise<string> {
   const absolute = resolveAbsoluteImageUrl(url);
   if (!absolute) return url;
   if (absolute.startsWith("data:")) return absolute;
 
-  const cached = dataUrlCache.get(absolute);
+  const cacheKey = options?.deckHandle && isDeckImagePath(absolute)
+    ? `deck:${absolute}`
+    : absolute;
+  const cached = dataUrlCache.get(cacheKey);
   if (cached) return cached;
+
+  if (options?.deckHandle && isDeckImagePath(absolute)) {
+    const blob = await readDeckImageBlob(options.deckHandle, absolute);
+    if (blob) {
+      const dataUrl = await compressBlobToDataUrl(blob);
+      dataUrlCache.set(cacheKey, dataUrl);
+      return dataUrl;
+    }
+  }
 
   try {
     const response = await fetch(absolute);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const blob = await response.blob();
     const dataUrl = await compressBlobToDataUrl(blob);
-    dataUrlCache.set(absolute, dataUrl);
+    dataUrlCache.set(cacheKey, dataUrl);
     return dataUrl;
   } catch {
     return new Promise((resolve) => {
@@ -108,7 +135,7 @@ async function fetchImageAsDataUrl(url: string): Promise<string> {
       img.onload = () => {
         void rasterizeImageElement(img)
           .then((dataUrl) => {
-            dataUrlCache.set(absolute, dataUrl);
+            dataUrlCache.set(cacheKey, dataUrl);
             resolve(dataUrl);
           })
           .catch(() => resolve(url));
@@ -135,7 +162,10 @@ export function revealLoadedImagesForCapture(root: ParentNode): void {
 }
 
 /** Replace img/background URLs with embedded data URLs for standalone HTML and reliable capture. */
-export async function embedImagesForExport(root: ParentNode): Promise<void> {
+export async function embedImagesForExport(
+  root: ParentNode,
+  options?: ExportImageOptions,
+): Promise<void> {
   const imgTasks: Promise<void>[] = [];
 
   root.querySelectorAll<HTMLImageElement>("img[src]").forEach((img) => {
@@ -143,7 +173,7 @@ export async function embedImagesForExport(root: ParentNode): Promise<void> {
     if (!src || src.startsWith("data:")) return;
 
     imgTasks.push(
-      fetchImageAsDataUrl(src).then((dataUrl) => {
+      fetchImageAsDataUrl(src, options).then((dataUrl) => {
         if (dataUrl.startsWith("data:")) {
           img.setAttribute("src", dataUrl);
         }
@@ -160,7 +190,7 @@ export async function embedImagesForExport(root: ParentNode): Promise<void> {
     if (!url || url.startsWith("data:")) return;
 
     bgTasks.push(
-      fetchImageAsDataUrl(url).then((dataUrl) => {
+      fetchImageAsDataUrl(url, options).then((dataUrl) => {
         if (dataUrl.startsWith("data:")) {
           element.style.backgroundImage = `url("${dataUrl}")`;
         }
@@ -174,7 +204,10 @@ export async function embedImagesForExport(root: ParentNode): Promise<void> {
 const CSS_URL_PATTERN = /url\(\s*(["']?)([^"')]+)\1\s*\)/g;
 
 /** Embed remote asset URLs inside exported CSS so standalone HTML works offline. */
-export async function embedUrlsInCss(css: string): Promise<string> {
+export async function embedUrlsInCss(
+  css: string,
+  options?: ExportImageOptions,
+): Promise<string> {
   const rawUrls = new Set<string>();
   for (const match of css.matchAll(CSS_URL_PATTERN)) {
     const raw = match[2]?.trim();
@@ -186,7 +219,7 @@ export async function embedUrlsInCss(css: string): Promise<string> {
   const replacements = new Map<string, string>();
   await Promise.all(
     [...rawUrls].map(async (raw) => {
-      const dataUrl = await fetchImageAsDataUrl(raw);
+      const dataUrl = await fetchImageAsDataUrl(raw, options);
       if (dataUrl.startsWith("data:")) {
         replacements.set(raw, dataUrl);
       }

@@ -165,7 +165,9 @@ export function SlideFitContent({
             "slide-fit-content-body w-full min-h-0",
             overflowColumns > 1
               ? "slide-content-overflow h-auto self-start"
-              : "h-full",
+              : shouldCenter
+                ? "h-auto"
+                : "h-full",
             scaled && "slide-content-scaled",
             contentClassName,
           )}

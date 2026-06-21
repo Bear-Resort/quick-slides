@@ -1,5 +1,6 @@
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
+import { DeckProvider } from "@/context/DeckContext";
 import { ExportSlidePage, SLIDE_HEIGHT, SLIDE_WIDTH } from "@/components/ExportSlidePage";
 import {
   getCaptureBackgroundColor,
@@ -15,7 +16,9 @@ import {
   embedImagesForExport,
   embedUrlsInCss,
   revealLoadedImagesForCapture,
+  type ExportImageOptions,
 } from "@/lib/exportImages";
+import { resolveDeckImageSrc } from "@/lib/library/deckImages";
 import { replaceMathEquationsForCapture } from "@/lib/exportMathJax";
 import { getLanguage, type Language } from "@/lib/language";
 import { getExportBasename } from "@/lib/presentationFilename";
@@ -513,6 +516,7 @@ async function renderSlidesForExport(
   markdown: string,
   theme: SlideThemeId,
   colorTheme: Theme,
+  exportImages: ExportImageOptions,
   onSlide: (element: HTMLElement, index: number) => Promise<void>,
 ): Promise<void> {
   const slides = splitSlides(markdown);
@@ -522,22 +526,36 @@ async function renderSlidesForExport(
   const mount = document.createElement("div");
   mount.id = EXPORT_MOUNT_ID;
   mount.className = colorTheme === "night" ? "night" : "";
-  // Off-screen so the live preview never shows through during capture.
   mount.style.cssText =
     "position:fixed;left:-10000px;top:0;width:1280px;height:720px;pointer-events:none;overflow:hidden;";
   document.body.appendChild(mount);
 
   const root = createRoot(mount);
+  const { deckHandle, deckId } = exportImages;
 
   try {
     for (let i = 0; i < slides.length; i++) {
-      root.render(
-        createElement(ExportSlidePage, {
-          markdown: slides[i] ?? "",
-          theme,
-          slideIndex: i,
-        }),
-      );
+      const slidePage = createElement(ExportSlidePage, {
+        markdown: slides[i] ?? "",
+        theme,
+        slideIndex: i,
+      });
+
+      let tree: ReactNode = slidePage;
+      if (deckHandle && deckId) {
+        tree = createElement(DeckProvider, {
+          folderName: deckId,
+          handle: deckHandle,
+          resolveImageSrc: (src: string) =>
+            resolveDeckImageSrc(deckHandle, deckId, src),
+          storeImage: async () => {
+            throw new Error("Export is read-only");
+          },
+          children: slidePage,
+        });
+      }
+
+      root.render(tree);
       await waitForRender(mount);
       const slideEl = mount.firstElementChild;
       if (!(slideEl instanceof HTMLElement)) {
@@ -551,7 +569,10 @@ async function renderSlidesForExport(
   }
 }
 
-async function prepareSlideElementForExport(slideEl: HTMLElement): Promise<HTMLElement> {
+async function prepareSlideElementForExport(
+  slideEl: HTMLElement,
+  exportImages: ExportImageOptions,
+): Promise<HTMLElement> {
   const pageRoot = slideEl.classList.contains("export-slide-page")
     ? slideEl
     : slideEl.querySelector<HTMLElement>(".export-slide-page") ?? slideEl;
@@ -568,7 +589,7 @@ async function prepareSlideElementForExport(slideEl: HTMLElement): Promise<HTMLE
   await waitForCaptureImages(captureScope);
   await waitForExportReady(captureScope);
   revealLoadedImagesForCapture(captureScope);
-  await embedImagesForExport(captureScope);
+  await embedImagesForExport(captureScope, exportImages);
 
   return pageRoot;
 }
@@ -587,9 +608,12 @@ export async function downloadSlidesPdf(
   theme: SlideThemeId,
   colorTheme: Theme,
   filename: string,
+  deckHandle: FileSystemDirectoryHandle | null = null,
+  deckId: string | null = null,
 ): Promise<void> {
   const { jsPDF } = await import("jspdf");
   const exportBasename = getExportBasename(filename, getLanguage());
+  const exportImages: ExportImageOptions = { deckHandle, deckId };
 
   const pdf = new jsPDF({
     orientation: "landscape",
@@ -599,8 +623,13 @@ export async function downloadSlidesPdf(
   });
 
   try {
-    await renderSlidesForExport(markdown, theme, colorTheme, async (slideEl, index) => {
-      const pageRoot = await prepareSlideElementForExport(slideEl);
+    await renderSlidesForExport(
+      markdown,
+      theme,
+      colorTheme,
+      exportImages,
+      async (slideEl, index) => {
+        const pageRoot = await prepareSlideElementForExport(slideEl, exportImages);
 
       const slideCanvas = pageRoot.querySelector<HTMLElement>(".slide-canvas");
       if (!(slideCanvas instanceof HTMLElement)) {
@@ -612,7 +641,8 @@ export async function downloadSlidesPdf(
       }
 
       await rasterizeSlideToPdf(pdf, pageRoot, slideCanvas);
-    });
+      },
+    );
 
     pdf.save(`${exportBasename}.pdf`);
   } finally {
@@ -750,19 +780,28 @@ export async function downloadSlidesHtml(
   theme: SlideThemeId,
   colorTheme: Theme,
   filename: string,
+  deckHandle: FileSystemDirectoryHandle | null = null,
+  deckId: string | null = null,
 ): Promise<void> {
   const slideFragments: string[] = [];
   const language = getLanguage();
   const exportBasename = getExportBasename(filename, language);
   const documentTitle = filename.trim() || exportBasename;
+  const exportImages: ExportImageOptions = { deckHandle, deckId };
 
   try {
-    await renderSlidesForExport(markdown, theme, colorTheme, async (slideEl) => {
-      await prepareSlideElementForExport(slideEl);
-      slideFragments.push(slideEl.outerHTML);
-    });
+    await renderSlidesForExport(
+      markdown,
+      theme,
+      colorTheme,
+      exportImages,
+      async (slideEl) => {
+        await prepareSlideElementForExport(slideEl, exportImages);
+        slideFragments.push(slideEl.outerHTML);
+      },
+    );
 
-    const embeddedStyles = await embedUrlsInCss(collectEmbeddedStyles());
+    const embeddedStyles = await embedUrlsInCss(collectEmbeddedStyles(), exportImages);
     const html = buildHtmlDocument(
       slideFragments,
       colorTheme,

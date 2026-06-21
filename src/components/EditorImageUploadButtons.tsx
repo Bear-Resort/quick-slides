@@ -1,10 +1,12 @@
+import { useRef, useState } from "react";
 import { useLanguage } from "@/lib/useLanguage";
 import type { CharRangePosition } from "@/lib/editorInsert";
 import { EDITOR_PLACEHOLDER_LABELS } from "@/lib/editorPlaceholders";
 import { EditorPlaceholderChip } from "@/components/EditorPlaceholderChip";
+import { EditorImagePickerDialog } from "@/components/EditorImagePickerDialog";
 import type { ImageUploadSlot } from "@/lib/editorInsert";
 import { storeEditorImage } from "@/lib/editorImages";
-import { useRef } from "react";
+import { useDeckContext } from "@/context/DeckContext";
 
 const copy = {
   en: {
@@ -32,12 +34,22 @@ export function EditorImageUploadButtons({
 }: EditorImageUploadButtonsProps) {
   const language = useLanguage();
   const t = copy[language];
+  const { storeImage, mode, handle, folderName } = useDeckContext();
+  const isLibraryDeck = mode === "library" && handle && folderName;
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingSlotRef = useRef<ImageUploadSlot | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  const openFilePicker = (slot: ImageUploadSlot) => {
+  const openUpload = (slot: ImageUploadSlot) => {
     onPrepareUpload?.();
     pendingSlotRef.current = slot;
+
+    if (isLibraryDeck) {
+      setPickerOpen(true);
+      return;
+    }
+
     fileInputRef.current?.click();
   };
 
@@ -56,6 +68,18 @@ export function EditorImageUploadButtons({
     }
   };
 
+  const handlePickerSelect = (relativePath: string) => {
+    const slot = pendingSlotRef.current;
+    pendingSlotRef.current = null;
+    if (!slot) return;
+    onUpload(slot, relativePath);
+  };
+
+  const handlePickerClose = () => {
+    setPickerOpen(false);
+    pendingSlotRef.current = null;
+  };
+
   if (slots.length === 0) return null;
 
   return (
@@ -67,6 +91,16 @@ export function EditorImageUploadButtons({
         className="hidden"
         onChange={(event) => void handleFileChange(event)}
       />
+      {isLibraryDeck && (
+        <EditorImagePickerDialog
+          open={pickerOpen}
+          deckHandle={handle}
+          deckId={folderName}
+          onClose={handlePickerClose}
+          onSelect={handlePickerSelect}
+          storeImage={storeImage}
+        />
+      )}
       {slots.map((slot) => {
         const position = positions.get(slot.parenStart);
         if (!position) return null;
@@ -78,7 +112,7 @@ export function EditorImageUploadButtons({
             label={t.upload}
             ariaLabel={t.upload}
             position={position}
-            onClick={() => openFilePicker(slot)}
+            onClick={() => openUpload(slot)}
           />
         );
       })}
