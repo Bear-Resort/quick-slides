@@ -2,7 +2,7 @@ import { useRef, type ReactNode } from "react";
 import { ThemeStickerSlideDecoration } from "@/components/ThemeStickerSlideDecoration";
 import type { SlideLayoutType } from "@/lib/slideLayout";
 import type { SlideThemeId } from "@/lib/slideThemes";
-import { isStickerSlideTheme } from "@/lib/stickerThemeAssets";
+import { isStickerSlideTheme } from "@/lib/themes/registry";
 import { cn } from "@/lib/utils";
 
 type SlideCanvasContentProps = {

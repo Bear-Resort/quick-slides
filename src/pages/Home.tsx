@@ -6,12 +6,14 @@ import {
   MarkdownEditor,
   type MarkdownEditorHandle,
 } from "@/components/MarkdownEditor";
+import { PresentationFilename } from "@/components/PresentationFilename";
 import { SlideDeck, type SlideDeckHandle } from "@/components/SlideDeck";
 import { SlidePresenter } from "@/components/SlidePresenter";
 import { StyleSelector } from "@/components/StyleSelector";
 import { getSlideNavigation } from "@/lib/slideMarkers";
 import { SAMPLE_MARKDOWN } from "@/lib/markdown";
 import type { SlideThemeId } from "@/lib/slideThemes";
+import { usePresentationFilename } from "@/lib/usePresentationFilename";
 import { useLanguage } from "@/lib/useLanguage";
 
 const copy = {
@@ -30,6 +32,7 @@ const copy = {
 export function Home() {
   const language = useLanguage();
   const t = copy[language];
+  const presentationFilename = usePresentationFilename();
   const [markdown, setMarkdown] = useState("");
 
   const handleLoadSample = useCallback(() => {
@@ -57,6 +60,9 @@ export function Home() {
       />
       <main className="home-split-layout grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] overflow-hidden sm:grid-cols-2 sm:grid-rows-[minmax(0,1fr)]">
         <section className="home-split-editor flex min-h-0 min-w-0 flex-col overflow-hidden border-b border-gray-300 sm:border-r sm:border-b-0 dark:border-gray-700">
+          <div className="shrink-0 border-b border-gray-300 px-4 py-3 dark:border-gray-700">
+            <PresentationFilename />
+          </div>
           <div className="shrink-0 border-b border-gray-300 px-4 py-2 text-xs font-semibold tracking-wide text-muted-foreground dark:border-gray-700">
             {t.source}
           </div>
@@ -78,6 +84,7 @@ export function Home() {
             <SlideActions
               markdown={markdown}
               theme={slideTheme}
+              filename={presentationFilename}
               onPresent={() => setPresenting(true)}
             />
           </div>

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { resolveEditorImageSrc } from "@/lib/editorImages";
-import type { SlideImage as SlideImageData } from "@/lib/slideLayout";
+import { getSlideImageCaption, type SlideImage as SlideImageData } from "@/lib/slideLayout";
 
 type SlideImageProps = {
   image: SlideImageData;
@@ -36,39 +36,53 @@ export function SlideImagePanel({ image, variant = "default" }: SlideImageProps)
 
   const showPlaceholder = !hasSrc || !loaded || failed;
   const isHero = variant === "hero";
+  const caption =
+    hasSrc && loaded && !failed ? getSlideImageCaption(image.alt) : null;
 
   return (
-    <div
+    <figure
       className={cn(
-        "slide-image-panel relative flex min-h-0 w-full items-center justify-center",
-        isHero ? "h-full max-h-full" : "h-full",
+        "slide-image-panel relative flex h-full max-h-full min-h-0 w-full flex-col overflow-hidden",
       )}
     >
-      {showPlaceholder && (
-        <ImagePlaceholder
-          alt={image.alt}
-          message={
-            !hasSrc
-              ? "No image URL"
-              : failed
-                ? "Failed to load"
-                : "Loading…"
-          }
-        />
-      )}
-      {hasSrc && !failed && (
-        <img
-          src={resolvedSrc}
-          alt={image.alt}
-          onLoad={() => setLoaded(true)}
-          onError={() => setFailed(true)}
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+        {showPlaceholder && (
+          <ImagePlaceholder
+            alt={image.alt}
+            message={
+              !hasSrc
+                ? "No image URL"
+                : failed
+                  ? "Failed to load"
+                  : "Loading…"
+            }
+          />
+        )}
+        {hasSrc && !failed && (
+          <img
+            src={resolvedSrc}
+            alt={image.alt}
+            onLoad={() => setLoaded(true)}
+            onError={() => setFailed(true)}
+            className={cn(
+              "rounded-xl object-contain",
+              "max-h-full max-w-full h-auto w-auto",
+              isHero && "w-full",
+              !loaded && "sr-only",
+            )}
+          />
+        )}
+      </div>
+      {caption ? (
+        <figcaption
           className={cn(
-            "rounded-xl object-contain",
-            isHero ? "max-h-full w-full max-w-full" : "max-h-full max-w-full",
-            !loaded && "sr-only",
+            "slide-image-caption shrink-0 pt-3 text-center text-muted-foreground",
+            isHero ? "text-2xl" : "text-xl",
           )}
-        />
-      )}
-    </div>
+        >
+          {caption}
+        </figcaption>
+      ) : null}
+    </figure>
   );
 }

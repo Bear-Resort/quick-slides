@@ -35,10 +35,16 @@ const copy = {
 type SlideActionsProps = {
   markdown: string;
   theme: SlideThemeId;
+  filename: string;
   onPresent: () => void;
 };
 
-export function SlideActions({ markdown, theme, onPresent }: SlideActionsProps) {
+export function SlideActions({
+  markdown,
+  theme,
+  filename,
+  onPresent,
+}: SlideActionsProps) {
   const language = useLanguage();
   const t = copy[language];
   const [exporting, setExporting] = useState<"pdf" | "html" | null>(null);
@@ -47,7 +53,7 @@ export function SlideActions({ markdown, theme, onPresent }: SlideActionsProps) 
     if (exporting) return;
     setExporting("pdf");
     try {
-      await downloadSlidesPdf(markdown, theme, getTheme());
+      await downloadSlidesPdf(markdown, theme, getTheme(), filename);
     } catch (error) {
       console.error("PDF export failed:", error);
       window.alert(t.exportFailed);
@@ -60,7 +66,7 @@ export function SlideActions({ markdown, theme, onPresent }: SlideActionsProps) 
     if (exporting) return;
     setExporting("html");
     try {
-      await downloadSlidesHtml(markdown, theme, getTheme());
+      await downloadSlidesHtml(markdown, theme, getTheme(), filename);
     } catch (error) {
       console.error("HTML export failed:", error);
       window.alert(t.exportFailed);

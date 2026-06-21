@@ -3,19 +3,30 @@ import { createRoot } from "react-dom/client";
 import { ExportSlidePage, SLIDE_HEIGHT, SLIDE_WIDTH } from "@/components/ExportSlidePage";
 import {
   getCaptureBackgroundColor,
+  inlineColumnStylesForCapture,
   prepareKatexForCapture,
   prepareSlideForCapture,
   waitForCaptureImages,
   waitForExportReady,
+  waitForSlideFitContent,
 } from "@/lib/exportCapture";
+import {
+  clearExportImageCache,
+  embedImagesForExport,
+  embedUrlsInCss,
+  revealLoadedImagesForCapture,
+} from "@/lib/exportImages";
 import { replaceMathEquationsForCapture } from "@/lib/exportMathJax";
 import { getLanguage, type Language } from "@/lib/language";
+import { getExportBasename } from "@/lib/presentationFilename";
 import { presenterUiCopy } from "@/lib/presenterUi";
 import { splitSlides } from "@/lib/slides";
 import { getSlideThemeAttributes, type SlideThemeId } from "@/lib/slideThemes";
 import type { Theme } from "@/lib/theme";
 
 const EXPORT_MOUNT_ID = "quick-slides-export-mount";
+const PDF_CAPTURE_SCALE = 1.5;
+const PDF_JPEG_QUALITY = 0.92;
 
 async function waitForRender(root?: ParentNode): Promise<void> {
   await waitForExportReady(root);
@@ -540,6 +551,28 @@ async function renderSlidesForExport(
   }
 }
 
+async function prepareSlideElementForExport(slideEl: HTMLElement): Promise<HTMLElement> {
+  const pageRoot = slideEl.classList.contains("export-slide-page")
+    ? slideEl
+    : slideEl.querySelector<HTMLElement>(".export-slide-page") ?? slideEl;
+  pageRoot.classList.add("export-pdf-capture");
+  const captureScope = pageRoot;
+
+  await waitForSlideFitContent(captureScope);
+  prepareSlideForCapture(slideEl);
+  inlineColumnStylesForCapture(captureScope);
+  prepareKatexForCapture(captureScope);
+  await replaceMathEquationsForCapture(captureScope);
+  prepareKatexForCapture(captureScope);
+  await waitForExportReady(captureScope);
+  await waitForCaptureImages(captureScope);
+  await waitForExportReady(captureScope);
+  revealLoadedImagesForCapture(captureScope);
+  await embedImagesForExport(captureScope);
+
+  return pageRoot;
+}
+
 function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -553,8 +586,10 @@ export async function downloadSlidesPdf(
   markdown: string,
   theme: SlideThemeId,
   colorTheme: Theme,
+  filename: string,
 ): Promise<void> {
   const { jsPDF } = await import("jspdf");
+  const exportBasename = getExportBasename(filename, getLanguage());
 
   const pdf = new jsPDF({
     orientation: "landscape",
@@ -563,34 +598,26 @@ export async function downloadSlidesPdf(
     hotfixes: ["px_scaling"],
   });
 
-  await renderSlidesForExport(markdown, theme, colorTheme, async (slideEl, index) => {
-    const pageRoot = slideEl.classList.contains("export-slide-page")
-      ? slideEl
-      : slideEl.querySelector<HTMLElement>(".export-slide-page") ?? slideEl;
-    pageRoot.classList.add("export-pdf-capture");
-    const captureRoot = pageRoot;
-    const captureScope = pageRoot;
+  try {
+    await renderSlidesForExport(markdown, theme, colorTheme, async (slideEl, index) => {
+      const pageRoot = await prepareSlideElementForExport(slideEl);
 
-    prepareSlideForCapture(slideEl);
-    prepareKatexForCapture(captureScope);
-    await replaceMathEquationsForCapture(captureScope);
-    prepareKatexForCapture(captureScope);
-    await waitForExportReady(captureScope);
-    await waitForCaptureImages(captureScope);
+      const slideCanvas = pageRoot.querySelector<HTMLElement>(".slide-canvas");
+      if (!(slideCanvas instanceof HTMLElement)) {
+        throw new Error("Slide canvas not found for PDF export");
+      }
 
-    const slideCanvas = pageRoot.querySelector<HTMLElement>(".slide-canvas");
-    if (!(slideCanvas instanceof HTMLElement)) {
-      throw new Error("Slide canvas not found for PDF export");
-    }
+      if (index > 0) {
+        pdf.addPage([SLIDE_WIDTH, SLIDE_HEIGHT], "landscape");
+      }
 
-    if (index > 0) {
-      pdf.addPage([SLIDE_WIDTH, SLIDE_HEIGHT], "landscape");
-    }
+      await rasterizeSlideToPdf(pdf, pageRoot, slideCanvas);
+    });
 
-    await rasterizeSlideToPdf(pdf, captureRoot, slideCanvas);
-  });
-
-  pdf.save("quick-slides.pdf");
+    pdf.save(`${exportBasename}.pdf`);
+  } finally {
+    clearExportImageCache();
+  }
 }
 
 async function rasterizeSlideToPdf(
@@ -609,21 +636,32 @@ async function rasterizeSlideToPdf(
   const canvas = await html2canvas(captureRoot, {
     width: SLIDE_WIDTH,
     height: SLIDE_HEIGHT,
-    scale: 2,
+    scale: PDF_CAPTURE_SCALE,
     useCORS: true,
     backgroundColor,
     foreignObjectRendering: false,
     logging: false,
   });
 
+  const dataUrl = canvas.toDataURL("image/jpeg", PDF_JPEG_QUALITY);
   pdf.addImage(
-    canvas.toDataURL("image/png"),
-    "PNG",
+    dataUrl,
+    "JPEG",
     0,
     0,
     SLIDE_WIDTH,
     SLIDE_HEIGHT,
+    undefined,
+    "FAST",
   );
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function buildHtmlDocument(
@@ -631,6 +669,8 @@ function buildHtmlDocument(
   colorTheme: Theme,
   slideThemeId: SlideThemeId,
   language: Language,
+  embeddedStyles: string,
+  documentTitle: string,
 ): string {
   const slidesHtml = slideFragments
     .map(
@@ -652,12 +692,12 @@ function buildHtmlDocument(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quick Slides</title>
+  <title>${escapeHtml(documentTitle)}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-${collectEmbeddedStyles()}
+${embeddedStyles}
 ${PRESENTER_STYLES}
 ${EXPORT_SAFARI_COLOR_FALLBACKS}
   </style>
@@ -709,13 +749,30 @@ export async function downloadSlidesHtml(
   markdown: string,
   theme: SlideThemeId,
   colorTheme: Theme,
+  filename: string,
 ): Promise<void> {
   const slideFragments: string[] = [];
+  const language = getLanguage();
+  const exportBasename = getExportBasename(filename, language);
+  const documentTitle = filename.trim() || exportBasename;
 
-  await renderSlidesForExport(markdown, theme, colorTheme, async (slideEl) => {
-    slideFragments.push(slideEl.outerHTML);
-  });
+  try {
+    await renderSlidesForExport(markdown, theme, colorTheme, async (slideEl) => {
+      await prepareSlideElementForExport(slideEl);
+      slideFragments.push(slideEl.outerHTML);
+    });
 
-  const html = buildHtmlDocument(slideFragments, colorTheme, theme, getLanguage());
-  downloadBlob(new Blob([html], { type: "text/html;charset=utf-8" }), "quick-slides.html");
+    const embeddedStyles = await embedUrlsInCss(collectEmbeddedStyles());
+    const html = buildHtmlDocument(
+      slideFragments,
+      colorTheme,
+      theme,
+      language,
+      embeddedStyles,
+      documentTitle,
+    );
+    downloadBlob(new Blob([html], { type: "text/html;charset=utf-8" }), `${exportBasename}.html`);
+  } finally {
+    clearExportImageCache();
+  }
 }

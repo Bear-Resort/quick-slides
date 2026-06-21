@@ -198,6 +198,33 @@ function VerticallyCenteredSlideLayout({
   );
 }
 
+function ImageSlideTitleBlock({
+  body,
+  layout,
+}: {
+  body: string;
+  layout: SlideLayoutType;
+}) {
+  const { headingText } = splitContentHeading(body);
+
+  if (layout === "content" && headingText) {
+    return (
+      <h3 className="slide-content-heading shrink-0 text-5xl font-bold text-left">
+        {headingText}
+      </h3>
+    );
+  }
+
+  return (
+    <div className="shrink-0 px-4 pt-6">
+      <SlideMarkdownBody
+        markdown={body}
+        layout={layout === "content" ? "content" : layout}
+      />
+    </div>
+  );
+}
+
 function ImageHeroSlideLayout({
   body,
   layout,
@@ -209,27 +236,33 @@ function ImageHeroSlideLayout({
   image: SlideImage;
   className?: string;
 }) {
-  const { headingText } = splitContentHeading(body);
-
-  const titleBlock =
-    layout === "content" && headingText ? (
-      <h3 className="slide-content-heading shrink-0 text-5xl font-bold text-left">
-        {headingText}
-      </h3>
-    ) : (
-      <div className="shrink-0 px-4 pt-6">
-        <SlideMarkdownBody
-          markdown={body}
-          layout={layout === "content" ? "content" : layout}
-        />
-      </div>
-    );
-
   return (
     <div className={cn("flex h-full w-full flex-col px-12 pb-10", className)}>
-      {titleBlock}
-      <div className="flex min-h-0 flex-1 items-center justify-center pt-4">
+      <ImageSlideTitleBlock body={body} layout={layout} />
+      <div className="slide-sticker-shift-target flex min-h-0 flex-1 items-center justify-center pt-4">
         <SlideImagePanel image={image} variant="hero" />
+      </div>
+    </div>
+  );
+}
+
+function DualImageSlideLayout({
+  body,
+  layout,
+  images,
+  className,
+}: {
+  body: string;
+  layout: SlideLayoutType;
+  images: [SlideImage, SlideImage];
+  className?: string;
+}) {
+  return (
+    <div className={cn("slide-content-layout flex h-full w-full flex-col px-12 pb-10", className)}>
+      <ImageSlideTitleBlock body={body} layout={layout} />
+      <div className="slide-sticker-shift-target grid min-h-0 flex-1 grid-cols-2 items-center gap-10 pt-4">
+        <SlideImagePanel image={images[0]} variant="hero" />
+        <SlideImagePanel image={images[1]} variant="hero" />
       </div>
     </div>
   );
@@ -237,15 +270,17 @@ function ImageHeroSlideLayout({
 
 function ContentSlideLayout({
   body,
-  image,
+  images = [],
   className,
   exportMode,
 }: {
   body: string;
-  image?: SlideImage | null;
+  images?: SlideImage[];
   className?: string;
   exportMode?: boolean;
 }) {
+  const image = images[0] ?? null;
+  const secondImage = images[1] ?? null;
   const { headingText, rest } = splitContentHeading(body);
   const bodyMarkdown = headingText ? rest : body;
 
@@ -276,13 +311,34 @@ function ContentSlideLayout({
     );
   }
 
+  if (image && secondImage && bodyMarkdown) {
+    return (
+      <div className={cn("slide-content-layout flex h-full w-full flex-col px-12 pb-10", className)}>
+        {heading}
+        <div className="slide-sticker-shift-target grid min-h-0 flex-1 grid-cols-3 items-center gap-6">
+          <div className="slide-content-slide-body flex min-h-0 min-w-0 flex-col">
+            {bodyContent}
+          </div>
+          <div className="flex h-full min-h-0 min-w-0 flex-col">
+            <SlideImagePanel image={image} />
+          </div>
+          <div className="flex h-full min-h-0 min-w-0 flex-col">
+            <SlideImagePanel image={secondImage} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (image) {
     return (
-      <div className={cn("flex h-full w-full flex-col px-12 pb-10", className)}>
+      <div className={cn("slide-content-layout flex h-full w-full flex-col px-12 pb-10", className)}>
         {heading}
-        <div className="grid min-h-0 flex-1 grid-cols-2 gap-10">
-          <div className="flex min-h-0 min-w-0 flex-col">{bodyContent}</div>
-          <div className="min-h-0 min-w-0">
+        <div className="slide-sticker-shift-target grid min-h-0 flex-1 grid-cols-2 items-center gap-10">
+          <div className="slide-content-slide-body flex min-h-0 min-w-0 flex-col">
+            {bodyContent}
+          </div>
+          <div className="flex h-full min-h-0 min-w-0 flex-col">
             <SlideImagePanel image={image} />
           </div>
         </div>
@@ -291,18 +347,69 @@ function ContentSlideLayout({
   }
 
   return (
-    <div className={cn("flex h-full w-full flex-col px-12 pb-10", className)}>
+    <div className={cn("slide-content-layout flex h-full w-full flex-col px-12 pb-10", className)}>
       {heading}
-      <div className="min-h-0 flex-1">{bodyContent}</div>
+      <div className="slide-content-slide-body min-h-0 flex-1">{bodyContent}</div>
     </div>
   );
 }
 
 export function SlideView({ markdown, className, exportMode = false }: SlideViewProps) {
   const resolved = prepareSlideMarkdown(resolvePlaceholdersForSlide(markdown));
-  const { layout, body, image } = parseSlide(resolved);
+  const { layout, body, images } = parseSlide(resolved);
+  const image = images[0] ?? null;
   const isVerticallyCentered = isVerticallyCenteredLayout(layout);
   const hasText = hasSlideTextContent(body, layout);
+
+  if (images.length >= 2 && !hasText) {
+    return (
+      <DualImageSlideLayout
+        body={body}
+        layout={layout}
+        images={[images[0], images[1]]}
+        className={className}
+      />
+    );
+  }
+
+  if (images.length >= 2 && hasText) {
+    if (!isVerticallyCentered) {
+      return (
+        <ContentSlideLayout
+          body={body}
+          images={images}
+          className={className}
+          exportMode={exportMode}
+        />
+      );
+    }
+
+    return (
+      <div
+        className={cn(
+          "slide-sticker-shift-target grid h-full w-full grid-cols-3 items-center gap-6 px-12 py-10",
+          className,
+        )}
+      >
+        <div className="flex h-full min-h-0 min-w-0 flex-col">
+          <SlideFitContent verticalAlign="center" disableFit={exportMode}>
+            <div className="mx-auto w-full max-w-xl">
+              <SlideMarkdownBody
+                markdown={body}
+                layout={layout === "title" ? "title" : "subtitle"}
+              />
+            </div>
+          </SlideFitContent>
+        </div>
+        <div className="flex h-full min-h-0 min-w-0 flex-col">
+          <SlideImagePanel image={images[0]} />
+        </div>
+        <div className="flex h-full min-h-0 min-w-0 flex-col">
+          <SlideImagePanel image={images[1]} />
+        </div>
+      </div>
+    );
+  }
 
   if (image && !hasText) {
     return (
@@ -320,7 +427,7 @@ export function SlideView({ markdown, className, exportMode = false }: SlideView
       return (
         <ContentSlideLayout
           body={body}
-          image={image}
+          images={images}
           className={className}
           exportMode={exportMode}
         />
@@ -330,7 +437,7 @@ export function SlideView({ markdown, className, exportMode = false }: SlideView
     return (
       <div
         className={cn(
-          "grid h-full w-full grid-cols-2 items-center gap-10 px-12 py-10",
+          "slide-sticker-shift-target grid h-full w-full grid-cols-2 items-center gap-10 px-12 py-10",
           className,
         )}
       >
@@ -344,7 +451,7 @@ export function SlideView({ markdown, className, exportMode = false }: SlideView
             </div>
           </SlideFitContent>
         </div>
-        <div className="min-h-0 min-w-0">
+        <div className="flex h-full min-h-0 min-w-0 flex-col">
           <SlideImagePanel image={image} />
         </div>
       </div>

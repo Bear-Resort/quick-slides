@@ -11,7 +11,7 @@ Write presentations in Markdown and preview them instantly. Quick Slides is a li
 - **Layout rules** — `#` for title slides, `##` for subtitle slides, `###` and below for content slides with a page heading
 - **Rich content** — GFM tables, lists, links, blockquotes, code blocks, and images (including placeholders)
 - **Math** — Inline (`$…$`) and display (`$$…$$`) equations via KaTeX
-- **Themes** — Regular, gray, and color-tinted themes (blue, red, green, purple), plus sticker themes:
+- **Themes** — Regular, gray, and color-tinted themes (blue, red, green, purple), plus sticker themes with configurable layouts (see [Theme setup](#theme-setup)):
   - **Bear Academy (小熊學園)** — yellow tint with corner stickers
   - **The Beauties (美少女们)** — pink tint with corner stickers
 - **Present mode** — Fullscreen slideshow with keyboard navigation
@@ -58,6 +58,23 @@ $$\\int_0^1 x^2 \\, dx = \\frac{1}{3}$$
 ```
 
 Put `---` on its own line between slides. Optional images use standard Markdown syntax: `![alt text](url)`.
+
+## Theme setup
+
+Sticker themes (Bear Academy, The Beauties) are configured in setup files under `src/lib/themes/`:
+
+| File | Theme |
+|------|-------|
+| [`bear-academy.setup.ts`](src/lib/themes/bear-academy.setup.ts) | Bear Academy |
+| [`the-beauties.setup.ts`](src/lib/themes/the-beauties.setup.ts) | The Beauties |
+
+Each sticker entry specifies:
+
+- **`file`** — filename in `themes/<theme-id>/` (for reference)
+- **`maxHeight`** — max rendered height in px on the 1280×720 slide (adjust per image)
+- **`layouts`** — which slide types use this sticker (`title`, `subtitle`, `content`)
+
+Stickers are placed in the **bottom-left or bottom-right corner** (alternating by slide index, switching if overlapping text). They rotate by slide index among entries that match the current layout.
 
 ## Deployment
 

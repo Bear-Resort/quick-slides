@@ -8,7 +8,8 @@ export type SlideImage = {
 export type ParsedSlide = {
   layout: SlideLayoutType;
   body: string;
-  image: SlideImage | null;
+  /** Up to two images extracted from slide markdown (in source order). */
+  images: SlideImage[];
 };
 
 import {
@@ -17,27 +18,42 @@ import {
   SLIDE_IMAGE_PLACEHOLDER_LABEL,
 } from "@/lib/editorPlaceholders";
 
-const IMAGE_PATTERN = /!\[([^\]]*)\]\(([^)]*)\)/;
+const IMAGE_PATTERN = /!\[([^\]]*)\]\(([^)]*)\)/g;
 
-/** Extract the first markdown image and remove it from the body. */
-function extractFirstImage(markdown: string): {
-  body: string;
-  image: SlideImage | null;
-} {
-  const match = IMAGE_PATTERN.exec(markdown);
-  if (!match) {
-    return { body: markdown.trim(), image: null };
-  }
-
+function parseImageMatch(match: RegExpExecArray): SlideImage {
   const rawSrc = match[2]?.trim() ?? "";
   const rawAlt = match[1] ?? "";
-  const image: SlideImage = {
+  return {
     alt: isImageAltPlaceholder(rawAlt) ? SLIDE_IMAGE_PLACEHOLDER_LABEL : rawAlt,
     src: isImagePlaceholderUrl(rawSrc) ? "" : rawSrc,
   };
+}
 
-  const body = markdown.replace(match[0], "").replace(/\n{3,}/g, "\n\n").trim();
-  return { body, image };
+/** Extract up to two markdown images and remove them from the body. */
+function extractImages(markdown: string): {
+  body: string;
+  images: SlideImage[];
+} {
+  const matches = [...markdown.matchAll(IMAGE_PATTERN)];
+  if (matches.length === 0) {
+    return { body: markdown.trim(), images: [] };
+  }
+
+  const images = matches.slice(0, 2).map(parseImageMatch);
+  let body = markdown;
+  for (const match of matches.slice(0, 2)) {
+    body = body.replace(match[0], "");
+  }
+  body = body.replace(/\n{3,}/g, "\n\n").trim();
+  return { body, images };
+}
+
+/** Caption text for a loaded slide image, or null when alt is empty/placeholder. */
+export function getSlideImageCaption(alt: string): string | null {
+  const trimmed = alt.trim();
+  if (!trimmed || trimmed === SLIDE_IMAGE_PLACEHOLDER_LABEL) return null;
+  if (isImageAltPlaceholder(trimmed)) return null;
+  return trimmed;
 }
 
 function getFirstHeadingLevel(markdown: string): number | null {
@@ -48,14 +64,14 @@ function getFirstHeadingLevel(markdown: string): number | null {
 
 /** `#` title slide; `##` subtitle slide; `###` content slide with fixed page title. */
 export function parseSlide(markdown: string): ParsedSlide {
-  const { body, image } = extractFirstImage(markdown);
+  const { body, images } = extractImages(markdown);
   const headingLevel = getFirstHeadingLevel(body);
 
   let layout: SlideLayoutType = "content";
   if (headingLevel === 1) layout = "title";
   else if (headingLevel === 2) layout = "subtitle";
 
-  return { layout, body, image };
+  return { layout, body, images };
 }
 
 export function isVerticallyCenteredLayout(layout: SlideLayoutType): boolean {

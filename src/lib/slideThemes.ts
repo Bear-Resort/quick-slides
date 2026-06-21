@@ -1,6 +1,5 @@
 import type { CSSProperties } from "react";
-import { BEAR_ACADEMY_ASSETS } from "@/lib/bearAcademyAssets";
-import { THE_BEAUTIES_ASSETS } from "@/lib/theBeautiesAssets";
+import { bearAcademySetup, theBeautiesSetup } from "@/lib/themes/registry";
 import { cn } from "@/lib/utils";
 
 export type SlideThemeId =
@@ -60,14 +59,14 @@ export const SLIDE_THEMES: SlideTheme[] = [
     name: { en: "Bear Academy", zh: "小熊學園" },
     swatch: "#eab308",
     iconSwatch: "#fefce8",
-    iconUrl: BEAR_ACADEMY_ASSETS.icon,
+    iconUrl: bearAcademySetup.icon.src,
   },
   {
     id: "the-beauties",
     name: { en: "The Beauties", zh: "美少女们" },
     swatch: "#ec4899",
     iconSwatch: "#fdf2f8",
-    iconUrl: THE_BEAUTIES_ASSETS.icon,
+    iconUrl: theBeautiesSetup.icon.src,
   },
 ];
 

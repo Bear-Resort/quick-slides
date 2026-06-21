@@ -1,4 +1,5 @@
 import { SLIDE_HEIGHT, SLIDE_WIDTH } from "@/lib/slideCanvas";
+import { SLIDE_FIT_READY_ATTR } from "@/lib/slideFitContent";
 
 const KATEX_FONT_FAMILIES = [
   "KaTeX_AMS",
@@ -150,7 +151,7 @@ function getExportPageRoot(root: HTMLElement): HTMLElement {
   return root.querySelector<HTMLElement>(".export-slide-page") ?? root;
 }
 
-function extractBackgroundImageUrl(backgroundImage: string): string | null {
+export function extractBackgroundImageUrl(backgroundImage: string): string | null {
   const match = backgroundImage.match(/url\(["']?([^"')]+)["']?\)/);
   return match?.[1] ?? null;
 }
@@ -167,6 +168,50 @@ function preloadImage(src: string): Promise<void> {
     img.onerror = () => resolve();
     img.src = src;
   });
+}
+
+/** Wait for SlideFitContent overflow-column measurement before export capture. */
+export async function waitForSlideFitContent(root: ParentNode): Promise<void> {
+  const bodies = root.querySelectorAll<HTMLElement>(".slide-fit-content-body");
+  if (bodies.length === 0) return;
+
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const allReady = [...bodies].every(
+      (body) => body.getAttribute(SLIDE_FIT_READY_ATTR) === "true",
+    );
+    if (allReady) {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+      return;
+    }
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  }
+}
+
+/** Inline computed column styles so html2canvas renders multi-column text. */
+export function inlineColumnStylesForCapture(root: ParentNode): void {
+  root
+    .querySelectorAll<HTMLElement>(
+      ".slide-content-overflow .markdown-preview.slide-content",
+    )
+    .forEach((element) => {
+      const computed = getComputedStyle(element);
+      element.style.columns = computed.columns;
+      element.style.columnGap = computed.columnGap;
+      element.style.width = computed.width;
+      element.style.maxWidth = computed.maxWidth;
+      element.style.transform = computed.transform;
+      element.style.transformOrigin = computed.transformOrigin;
+    });
+
+  root.querySelectorAll<HTMLElement>(".slide-fit-content-body.slide-content-overflow").forEach(
+    (element) => {
+      const computed = getComputedStyle(element);
+      element.style.paddingTop = computed.paddingTop;
+      element.style.maxHeight = computed.maxHeight;
+    },
+  );
 }
 
 /** Wait for slide images and CSS background images before html2canvas capture. */
