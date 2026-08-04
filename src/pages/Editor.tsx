@@ -143,7 +143,7 @@ export function Editor() {
 
   const [deckHandle, setDeckHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [metadata, setMetadata] = useState<DeckMetadata | null>(null);
-  const [ephemeralTitle, setEphemeralTitle] = useState(() => getPresentationFilename());
+  const [ephemeralTitle] = useState(() => getPresentationFilename());
   const [workspacePanel, setWorkspacePanel] = useState<
     "files" | "vcs" | "github" | null
   >(() => (deckId ? null : "files"));
