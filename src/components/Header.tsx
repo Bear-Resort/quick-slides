@@ -1,10 +1,11 @@
-import { Files, GitBranch, Github } from "lucide-react";
+import { Files, GitBranch, Github, Redo2, Undo2 } from "lucide-react";
 import { Return } from "@/components/Return";
 import { HelpButton } from "@/components/HelpDialog";
 import { Menu } from "@/components/Menu";
-import { PresentationFilename } from "@/components/PresentationFilename";
 import { useLanguage } from "@/lib/useLanguage";
 import { cn } from "@/lib/utils";
+
+export type WorkspaceMode = "browser" | "disk" | "git";
 
 const copy = {
   en: {
@@ -14,6 +15,11 @@ const copy = {
     filesTitle: "Browse presentations in your library",
     gitTitle: "Push and pull this presentation",
     githubTitle: "Sign in to GitHub and link a repository",
+    undo: "Undo",
+    redo: "Redo",
+    modeBrowser: "localStorage",
+    modeDisk: "Local Repository",
+    modeGit: "Git Project",
   },
   zh: {
     files: "文件",
@@ -22,6 +28,11 @@ const copy = {
     filesTitle: "浏览本地库中的演示文稿",
     gitTitle: "推送与拉取此演示文稿",
     githubTitle: "登录 GitHub 并关联仓库",
+    undo: "撤销",
+    redo: "重做",
+    modeBrowser: "本地存储",
+    modeDisk: "本地仓库",
+    modeGit: "Git 项目",
   },
 };
 
@@ -58,48 +69,89 @@ function ToolbarAction({
 type HeaderProps = {
   onLoadSample?: () => void;
   hasEditorContent?: boolean;
-  /** Editor document chrome in the top bar (quick-tex style). */
-  document?: {
-    title: string;
-    onTitleChange: (title: string) => void;
-  };
   workspace?: {
+    mode: WorkspaceMode;
+    /** Repository / folder name; empty for localStorage. */
+    repositoryName?: string;
     openPanel: "files" | "vcs" | "github" | null;
     onOpenFiles: () => void;
     onOpenGit: () => void;
     onOpenGithub: () => void;
+    onUndo?: () => void;
+    onRedo?: () => void;
   };
 };
+
+function modePillClass(mode: WorkspaceMode): string {
+  if (mode === "git") {
+    return "bg-emerald-600 text-white border-emerald-500/40";
+  }
+  if (mode === "disk") {
+    return "bg-sky-600 text-white border-sky-500/40";
+  }
+  return "bg-orange-500 text-white border-orange-400/40";
+}
 
 export function Header({
   onLoadSample,
   hasEditorContent = false,
-  document: doc,
   workspace,
 }: HeaderProps) {
   const language = useLanguage();
   const t = copy[language];
 
+  const modeLabel =
+    workspace?.mode === "git"
+      ? t.modeGit
+      : workspace?.mode === "disk"
+        ? t.modeDisk
+        : t.modeBrowser;
+
   return (
     <div className="qs-toolbar-layer relative shrink-0 px-2 pt-2">
       <div className="glass-panel glass-chrome app-header-bar flex h-12 items-center justify-between gap-3 px-3">
-        <div className="relative z-[1] flex min-w-0 flex-1 items-center gap-3">
-          {doc ? (
-            <PresentationFilename
-              value={doc.title}
-              onChange={doc.onTitleChange}
-              className="min-w-0"
-            />
-          ) : (
-            <>
-              <Return />
-              <h1 className="text-lg font-bold tracking-tight">Quick Slides</h1>
-            </>
-          )}
-        </div>
-        <div className="relative z-[1] flex shrink-0 items-center gap-1">
+        <div className="relative z-[1] flex min-w-0 shrink-0 items-center gap-2">
           {workspace ? (
             <>
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  title={t.undo}
+                  aria-label={t.undo}
+                  onClick={() => workspace.onUndo?.()}
+                  className="glass-toolbar-action inline-flex size-8 items-center justify-center rounded-md text-foreground"
+                >
+                  <Undo2 className="size-3.5" aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  title={t.redo}
+                  aria-label={t.redo}
+                  onClick={() => workspace.onRedo?.()}
+                  className="glass-toolbar-action inline-flex size-8 items-center justify-center rounded-md text-foreground"
+                >
+                  <Redo2 className="size-3.5" aria-hidden />
+                </button>
+              </div>
+
+              {workspace.repositoryName ? (
+                <p
+                  className="max-w-[12rem] truncate text-sm font-semibold tracking-tight text-foreground"
+                  title={workspace.repositoryName}
+                >
+                  {workspace.repositoryName}
+                </p>
+              ) : null}
+
+              <span
+                className={cn(
+                  "inline-flex shrink-0 items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold leading-none",
+                  modePillClass(workspace.mode),
+                )}
+              >
+                {modeLabel}
+              </span>
+
               <ToolbarAction
                 icon={Files}
                 label={t.files}
@@ -121,16 +173,32 @@ export function Header({
                 active={workspace.openPanel === "github"}
                 onClick={workspace.onOpenGithub}
               />
-              <div className="mx-1 h-6 w-px bg-white/14" aria-hidden />
+            </>
+          ) : (
+            <>
+              <Return />
+              <h1 className="text-lg font-bold tracking-tight">Quick Slides</h1>
+            </>
+          )}
+        </div>
+
+        <div className="relative z-[1] flex shrink-0 items-center gap-1">
+          {onLoadSample ? (
+            <>
+              <Return iconOnly />
+              <HelpButton
+                onLoadSample={onLoadSample}
+                hasEditorContent={hasEditorContent}
+              />
             </>
           ) : null}
-          {onLoadSample && (
-            <HelpButton
-              onLoadSample={onLoadSample}
-              hasEditorContent={hasEditorContent}
-            />
-          )}
-          <Menu />
+          <Menu
+            showLocalAutosave={
+              !workspace ||
+              workspace.mode === "browser" ||
+              workspace.mode === "disk"
+            }
+          />
         </div>
       </div>
     </div>

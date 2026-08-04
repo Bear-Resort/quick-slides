@@ -3,7 +3,12 @@ import { PresenterBar } from "@/components/PresenterBar";
 import { ScaledSlideFrame } from "@/components/ScaledSlideFrame";
 import { SlideView } from "@/components/SlideView";
 import { splitSlides } from "@/lib/slides";
-import { getSlideThemeAttributes, slideColorModeClass, type SlideColorMode, type SlideThemeId } from "@/lib/slideThemes";
+import {
+  getSlideThemeAttributes,
+  slideColorModeClass,
+  type SlideColorMode,
+  type SlideThemeId,
+} from "@/lib/slideThemes";
 import { parseSlide } from "@/lib/slideLayout";
 import { cn } from "@/lib/utils";
 

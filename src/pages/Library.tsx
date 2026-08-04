@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FolderOpen, Plus, Trash2 } from "lucide-react";
 import { Header } from "@/components/Header";
+import { NamePromptDialog } from "@/components/NamePromptDialog";
 import {
   connectLibraryRoot,
   createDeck,
@@ -47,6 +48,7 @@ const copy = {
     loadFailed: "Could not load library. Try reconnecting your folder.",
     deleteFailed: "Could not delete presentation.",
     createFailed: "Could not create presentation.",
+    namePrompt: "Presentation name",
   },
   zh: {
     title: "你的演示文稿",
@@ -69,6 +71,7 @@ const copy = {
     loadFailed: "无法加载库。请尝试重新连接文件夹。",
     deleteFailed: "无法删除演示文稿。",
     createFailed: "无法创建演示文稿。",
+    namePrompt: "演示文稿名称",
   },
 };
 
@@ -96,6 +99,7 @@ export function Library() {
   const [storageMode, setStorageMode] = useState<"disk" | "browser">("browser");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [namePromptOpen, setNamePromptOpen] = useState(false);
 
   const loadDecks = useCallback(async () => {
     setLoading(true);
@@ -141,7 +145,8 @@ export function Library() {
     await connectFolder(handle, "custom");
   };
 
-  const handleNew = async () => {
+  const handleNew = async (name: string) => {
+    setNamePromptOpen(false);
     let root = await getLibraryRoot();
     if (!root) {
       const handle = await createAutoDefaultLibraryRoot();
@@ -157,7 +162,7 @@ export function Library() {
 
     setBusy(true);
     try {
-      const deck = await createDeck(root, getDefaultPresentationFilename(language), language);
+      const deck = await createDeck(root, name.trim(), language);
       navigate(`/edit/${deck.folderName}`);
     } catch {
       window.alert(t.createFailed);
@@ -206,7 +211,7 @@ export function Library() {
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void handleNew()}
+                onClick={() => setNamePromptOpen(true)}
                 className="glass-primary inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold"
               >
                 <Plus className="size-4" aria-hidden="true" />
@@ -288,6 +293,15 @@ export function Library() {
           </Link>
         </div>
       </main>
+
+      <NamePromptDialog
+        open={namePromptOpen}
+        title={t.newPresentation}
+        label={t.namePrompt}
+        initialValue={getDefaultPresentationFilename(language)}
+        onCancel={() => setNamePromptOpen(false)}
+        onConfirm={(name) => void handleNew(name)}
+      />
     </div>
   );
 }

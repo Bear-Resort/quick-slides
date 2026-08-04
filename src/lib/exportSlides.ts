@@ -548,6 +548,7 @@ async function renderSlidesForExport(
       const slidePage = createElement(ExportSlidePage, {
         markdown: slides[i] ?? "",
         theme,
+        colorMode,
         slideIndex: i,
       });
 

@@ -2,6 +2,28 @@ import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { Leaf, Monitor, Moon, Settings, Sun, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DialogPortal } from "@/components/ui/dialog-portal";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  AUTOSAVE_OPTIONS,
+  EDITOR_FONT_FAMILY_OPTIONS,
+  EDITOR_FONT_SIZE_OPTIONS,
+  getAutosaveDelayMs,
+  getEditorFontFamily,
+  getEditorFontSize,
+  setAutosaveDelayMs,
+  setEditorFontFamily,
+  setEditorFontSize,
+  subscribeEditorSettings,
+  type AutosaveDelayMs,
+  type EditorFontFamily,
+  type EditorFontSize,
+} from "@/lib/editorSettings";
 import { setLanguage, type Language } from "@/lib/language";
 import { presenterUiCopy } from "@/lib/presenterUi";
 import { useLanguage } from "@/lib/useLanguage";
@@ -18,9 +40,11 @@ import { cn } from "@/lib/utils";
 type MenuProps = {
   /** Keep the dialog inside fullscreen containers instead of portaling to body. */
   portalled?: boolean;
+  /** Show local autosave controls (browser / disk library modes). */
+  showLocalAutosave?: boolean;
 };
 
-type SettingsTab = "appearance" | "language";
+type SettingsTab = "general" | "appearance" | "language";
 
 function SettingRow({
   label,
@@ -133,23 +157,61 @@ function SegmentedControl<T extends string>({
   );
 }
 
-function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+function SettingsDialog({
+  open,
+  onClose,
+  showLocalAutosave,
+}: {
+  open: boolean;
+  onClose: () => void;
+  showLocalAutosave: boolean;
+}) {
   const language = useLanguage();
   const t = presenterUiCopy[language];
-  const [tab, setTab] = useState<SettingsTab>("appearance");
-  const [preference, setPreference] = useState<ThemePreference>(() => getThemePreference());
+  const [tab, setTab] = useState<SettingsTab>(
+    showLocalAutosave ? "general" : "appearance",
+  );
+  const [preference, setPreference] = useState<ThemePreference>(() =>
+    getThemePreference(),
+  );
   const [energySave, setEnergySave] = useState(() => getEnergySaveMode());
+  const [autosaveDelay, setAutosaveDelay] = useState<AutosaveDelayMs>(() =>
+    getAutosaveDelayMs(),
+  );
+  const [fontSize, setFontSize] = useState<EditorFontSize>(() =>
+    getEditorFontSize(),
+  );
+  const [fontFamily, setFontFamily] = useState<EditorFontFamily>(() =>
+    getEditorFontFamily(),
+  );
 
   useEffect(() => {
     if (!open) return;
     setPreference(getThemePreference());
     setEnergySave(getEnergySaveMode());
+    setAutosaveDelay(getAutosaveDelayMs());
+    setFontSize(getEditorFontSize());
+    setFontFamily(getEditorFontFamily());
   }, [open]);
+
+  useEffect(() => {
+    if (!showLocalAutosave && tab === "general") {
+      setTab("appearance");
+    }
+  }, [showLocalAutosave, tab]);
 
   useEffect(() => {
     return subscribeTheme(() => {
       setPreference(getThemePreference());
       setEnergySave(getEnergySaveMode());
+    });
+  }, []);
+
+  useEffect(() => {
+    return subscribeEditorSettings(() => {
+      setAutosaveDelay(getAutosaveDelayMs());
+      setFontSize(getEditorFontSize());
+      setFontFamily(getEditorFontFamily());
     });
   }, []);
 
@@ -165,6 +227,14 @@ function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void 
   if (!open) return null;
 
   const tabs: Array<{ id: SettingsTab; label: string }> = [
+    ...(showLocalAutosave
+      ? [
+          {
+            id: "general" as const,
+            label: language === "zh" ? "通用" : "General",
+          },
+        ]
+      : []),
     { id: "appearance", label: language === "zh" ? "外观" : "Appearance" },
     { id: "language", label: language === "zh" ? "语言" : "Language" },
   ];
@@ -178,7 +248,7 @@ function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void 
         role="dialog"
         aria-modal="true"
         aria-labelledby="quick-slides-settings-title"
-        className="glass-panel glass-panel-dialog flex h-[min(420px,90vh)] w-full max-w-[420px] flex-col overflow-hidden rounded-xl border shadow-lg"
+        className="glass-panel glass-panel-dialog flex h-[min(520px,90vh)] w-full max-w-[420px] flex-col overflow-hidden rounded-xl border shadow-lg"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="glass-divider relative z-[1] flex shrink-0 items-center justify-between border-b px-5 py-3.5">
@@ -202,13 +272,15 @@ function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void 
             role="tablist"
             aria-label={t.settings}
             className="glass-seg-track relative grid h-10 w-full shrink-0 gap-1"
-            style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+            style={{
+              gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))`,
+            }}
           >
             <div
               aria-hidden
               className="glass-seg-active pointer-events-none absolute top-[var(--glass-seg-pad)] bottom-[var(--glass-seg-pad)] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
               style={{
-                left: `calc(${(tabs.findIndex((item) => item.id === tab) / tabs.length) * 100}% + var(--glass-seg-pad))`,
+                left: `calc(${(Math.max(0, tabs.findIndex((item) => item.id === tab)) / tabs.length) * 100}% + var(--glass-seg-pad))`,
                 width: `calc(${100 / tabs.length}% - (2 * var(--glass-seg-pad)))`,
               }}
             />
@@ -231,6 +303,46 @@ function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void 
           </div>
 
           <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
+            {tab === "general" && showLocalAutosave ? (
+              <div className="space-y-5">
+                <SettingRow
+                  label={language === "zh" ? "自动保存间隔" : "Autosave interval"}
+                  description={
+                    language === "zh"
+                      ? "仅用于本地存储与本地仓库模式。选择「从不」则仅在切换文件或离开页面时保存。"
+                      : "For localStorage and local repository modes only. Choose Never to save only when switching files or leaving the page."
+                  }
+                >
+                  <Select
+                    value={String(autosaveDelay)}
+                    onValueChange={(next) => {
+                      const delay = Number(next) as AutosaveDelayMs;
+                      setAutosaveDelay(delay);
+                      setAutosaveDelayMs(delay);
+                    }}
+                  >
+                    <SelectTrigger
+                      aria-label={
+                        language === "zh" ? "自动保存间隔" : "Autosave interval"
+                      }
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AUTOSAVE_OPTIONS.map((option) => (
+                        <SelectItem
+                          key={option.value}
+                          value={String(option.value)}
+                        >
+                          {option.label[language]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </SettingRow>
+              </div>
+            ) : null}
+
             {tab === "appearance" ? (
               <div className="space-y-5">
                 <SettingRow
@@ -298,8 +410,72 @@ function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void 
                     />
                   </div>
                 </SettingRow>
+
+                <SettingRow
+                  label={language === "zh" ? "编辑器字号" : "Editor size"}
+                  description={
+                    language === "zh"
+                      ? "Markdown 编辑区文字大小"
+                      : "Text size in the markdown editor"
+                  }
+                >
+                  <Select
+                    value={fontSize}
+                    onValueChange={(next) => {
+                      const size = next as EditorFontSize;
+                      setFontSize(size);
+                      setEditorFontSize(size);
+                    }}
+                  >
+                    <SelectTrigger
+                      aria-label={language === "zh" ? "编辑器字号" : "Editor size"}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EDITOR_FONT_SIZE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label[language]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </SettingRow>
+
+                <SettingRow
+                  label={language === "zh" ? "编辑器字体" : "Editor font"}
+                  description={
+                    language === "zh"
+                      ? "Markdown 编辑区字体"
+                      : "Typeface used in the markdown editor"
+                  }
+                >
+                  <Select
+                    value={fontFamily}
+                    onValueChange={(next) => {
+                      const family = next as EditorFontFamily;
+                      setFontFamily(family);
+                      setEditorFontFamily(family);
+                    }}
+                  >
+                    <SelectTrigger
+                      aria-label={language === "zh" ? "编辑器字体" : "Editor font"}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EDITOR_FONT_FAMILY_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label[language]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </SettingRow>
               </div>
-            ) : (
+            ) : null}
+
+            {tab === "language" ? (
               <SettingRow
                 label={language === "zh" ? "语言" : "Language"}
                 description={
@@ -308,17 +484,26 @@ function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void 
                     : "Language for UI and sample content"
                 }
               >
-                <select
-                  className="glass-input w-full rounded-lg px-3 py-2 text-sm"
+                <Select
                   value={language}
-                  onChange={(event) => setLanguage(event.target.value as Language)}
-                  aria-label={language === "zh" ? "语言" : "Language"}
+                  onValueChange={(next) => setLanguage(next as Language)}
                 >
-                  <option value="en">{presenterUiCopy.en.languageEn}</option>
-                  <option value="zh">{presenterUiCopy.zh.languageZh}</option>
-                </select>
+                  <SelectTrigger
+                    aria-label={language === "zh" ? "语言" : "Language"}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">
+                      {presenterUiCopy.en.languageEn}
+                    </SelectItem>
+                    <SelectItem value="zh">
+                      {presenterUiCopy.zh.languageZh}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </SettingRow>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
@@ -326,11 +511,20 @@ function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void 
   );
 }
 
-export function Menu({ portalled = true }: MenuProps) {
+export function Menu({
+  portalled = true,
+  showLocalAutosave = false,
+}: MenuProps) {
   const language = useLanguage();
   const [open, setOpen] = useState(false);
 
-  const dialog = <SettingsDialog open={open} onClose={() => setOpen(false)} />;
+  const dialog = (
+    <SettingsDialog
+      open={open}
+      onClose={() => setOpen(false)}
+      showLocalAutosave={showLocalAutosave}
+    />
+  );
 
   return (
     <>

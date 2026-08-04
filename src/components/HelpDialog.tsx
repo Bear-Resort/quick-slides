@@ -163,7 +163,7 @@ const copy = {
     sections: {
       start: {
         title: "Getting started",
-        body: "The editor starts empty. Write markdown on the left and the preview updates as you type, or load the sample document below. Use ◀ ▶ to walk through the syntax example. Comments in the code explain features — they are hidden in the preview.",
+        body: "Quick Slides is a Bear Resort app for quick, systematic slides with markdown and an agent-friendly repo layout. The editor starts empty — write markdown on the left and the preview updates as you type, or load the sample document below. Use ◀ ▶ to walk through the syntax example. Comments in the code explain features — they are hidden in the preview.",
       },
       present: {
         title: "Present",
@@ -171,7 +171,7 @@ const copy = {
       },
       instructions: {
         title: "AI instructions",
-        body: "Copy the block below and give it to any AI assistant when you want slide decks written for Quick Slides.",
+        body: "Copy the block below and give it to any AI assistant when you want slide decks — or a GitHub repository with quick-slides.json — written for Quick Slides.",
       },
     },
   },
@@ -190,7 +190,7 @@ const copy = {
     sections: {
       start: {
         title: "入门",
-        body: "编辑器默认为空。在左侧编写 Markdown 可实时预览，或点击下方加载示例文档。用 ◀ ▶ 浏览语法示例。代码中的注释说明功能，预览中不会显示。",
+        body: "Quick Slides 是小熊樂園出品的应用，用 Markdown 与智能体友好的仓库结构快速、系统地制作幻灯片。编辑器默认为空 — 在左侧编写 Markdown 可实时预览，或点击下方加载示例文档。用 ◀ ▶ 浏览语法示例。代码中的注释说明功能，预览中不会显示。",
       },
       present: {
         title: "演示",
@@ -198,7 +198,7 @@ const copy = {
       },
       instructions: {
         title: "AI 说明",
-        body: "复制下方内容，交给任意 AI 助手，即可按 Quick Slides 规则生成幻灯片。",
+        body: "复制下方内容，交给任意 AI 助手，即可按 Quick Slides 规则生成幻灯片，或搭建带 quick-slides.json 的 GitHub 仓库。",
       },
     },
   },

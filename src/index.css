@@ -644,6 +644,42 @@
     0 4px 16px hsl(var(--primary) / 0.22);
 }
 
+.glass-seg-tab-active {
+  border-radius: var(--glass-seg-inner-radius);
+  border: 1px solid hsl(0 0% 100% / 0.55);
+  color: hsl(var(--glass-seg-active-fg)) !important;
+  background: linear-gradient(
+    165deg,
+    hsl(0 0% 100% / 0.92) 0%,
+    hsl(145 40% 96% / 0.78) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.95),
+    inset 0 -1px 0 0 hsl(155 30% 20% / 0.06),
+    0 4px 18px hsl(0 0% 0% / 0.2);
+}
+
+:root:not(.night) .glass-seg-tab-active {
+  border-color: hsl(var(--primary) / 0.4);
+  background: linear-gradient(
+    165deg,
+    hsl(var(--primary) / 0.88) 0%,
+    hsl(var(--primary) / 0.65) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.45),
+    0 4px 16px hsl(var(--primary) / 0.22);
+}
+
+.night .glass-seg-tab-active {
+  border-color: hsl(0 0% 100% / 0.2);
+  background: linear-gradient(
+    165deg,
+    hsl(0 0% 100% / 0.92) 0%,
+    hsl(145 40% 96% / 0.78) 100%
+  );
+}
+
 .glass-toggle {
   position: relative;
   width: 2.75rem;
@@ -1425,7 +1461,37 @@ html.energy-save .glass-toggle[aria-checked="true"] {
 
 /* Frame / header bars use .glass-toolbar; keep locate-btn for slide chrome */
 .slide-frame-bar {
-  color: hsl(var(--foreground));
+  color: hsl(var(--muted-foreground));
+  border-bottom: 1px solid hsl(var(--border) / 0.55) !important;
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.7),
+    0 1px 0 0 hsl(var(--foreground) / 0.04);
+}
+
+.slide-frame-bar::before {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--muted) / 0.92) 0%,
+    hsl(var(--secondary) / 0.88) 100%
+  ) !important;
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+}
+
+.night .slide-frame-bar {
+  color: hsl(var(--muted-foreground));
+  border-bottom-color: hsl(0 0% 100% / 0.16) !important;
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.1),
+    0 1px 0 0 hsl(0 0% 0% / 0.25);
+}
+
+.night .slide-frame-bar::before {
+  background: linear-gradient(
+    180deg,
+    hsl(155 16% 22% / 0.95) 0%,
+    hsl(155 14% 16% / 0.92) 100%
+  ) !important;
 }
 
 .app-header-bar button.slide-locate-btn,

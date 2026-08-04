@@ -10,14 +10,14 @@ const copy = {
   en: {
     label: "Bear Resort",
     title: "A Bear Resort production",
-    body: "Quick Slides is part of the Bear Resort ecosystem — playful tools and experiences from the resort.",
+    body: 'Quick Slides is a Bear Resort app aiming to create quick, systematic slides using markdown and an agent system.',
     visit: "Visit Bear Resort",
     close: "Close",
   },
   zh: {
     label: "小熊樂園",
     title: "小熊樂園出品",
-    body: "Quick Slides 是小熊樂園生态的一部分 — 来自乐园的趣味工具与体验。",
+    body: "Quick Slides 是小熊樂園出品的应用，旨在用 Markdown 与智能体系统快速、系统地制作幻灯片。",
     visit: "访问小熊樂園",
     close: "关闭",
   },
@@ -99,20 +99,31 @@ function BearResortDialog({ open, onClose }: BearResortDialogProps) {
   );
 }
 
-export function Return() {
+export function Return({ iconOnly = false }: { iconOnly?: boolean } = {}) {
   const language = useLanguage();
   const t = copy[language];
   const [open, setOpen] = useState(false);
 
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)} className="slide-locate-btn glass-toolbar-action gap-2">
+      <Button
+        variant="outline"
+        size={iconOnly ? "icon" : "default"}
+        onClick={() => setOpen(true)}
+        aria-label={t.label}
+        title={t.label}
+        className={
+          iconOnly
+            ? "slide-locate-btn glass-toolbar-action"
+            : "slide-locate-btn glass-toolbar-action gap-2"
+        }
+      >
         <img
           src="https://bear-resort.github.io/logos/default-bear.gif"
           alt=""
-          className="h-6 w-6 object-contain"
+          className={iconOnly ? "h-5 w-5 object-contain" : "h-6 w-6 object-contain"}
         />
-        {t.label}
+        {iconOnly ? null : t.label}
       </Button>
       <BearResortDialog open={open} onClose={() => setOpen(false)} />
     </>

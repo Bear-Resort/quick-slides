@@ -3,6 +3,8 @@ export const QUICK_SLIDES_AI_INSTRUCTIONS = `# Quick Slides — AI writing instr
 
 Use these instructions when generating markdown slide decks for Quick Slides (or any markdown-to-slides tool that splits on \`---\`).
 
+Quick Slides is a **Bear Resort** app for quick, systematic slides using markdown and an agent-friendly repository layout.
+
 ## How to use
 
 Paste this entire document into:
@@ -12,7 +14,78 @@ Paste this entire document into:
 - A project file such as \`SKILL.md\`, \`AGENTS.md\`, \`instructions.md\`, or \`.cursorrules\`
 - A saved snippet you reuse whenever you need a new deck
 
-Apply whenever the user asks for presentations, slide decks, talks, or markdown formatted for Quick Slides.
+Apply whenever the user asks for presentations, slide decks, talks, or markdown formatted for Quick Slides — including setting up a **GitHub repository** for a deck.
+
+---
+
+## Repository layout (GitHub / local library)
+
+Each presentation is a folder (a GitHub repo root, or a subfolder under a shared library repo) with this structure:
+
+\`\`\`
+my-talk/
+  deck.md              # default slide markdown (entry file)
+  quick-slides.json    # title, themes, entry file, timestamps
+  images/              # optional images referenced as images/<file>
+  talks/intro.md       # optional extra .md decks in the same repo
+\`\`\`
+
+When creating or scaffolding a GitHub repository for Quick Slides:
+
+1. Create a repo (public or private) with at least \`deck.md\` and \`quick-slides.json\`.
+2. Optionally add an empty \`images/\` directory (or create it when the first image is added).
+3. Keep paths relative to the deck root — never absolute paths in markdown or JSON.
+4. Link the local presentation to that repo in Quick Slides (Git panel) so push/pull syncs these files via the GitHub Contents API.
+5. Prefer one logical deck per \`.md\` file; put multiple decks in one repo only when they share assets or a project.
+
+### \`quick-slides.json\` schema
+
+Always write valid JSON. Minimal example:
+
+\`\`\`json
+{
+  "version": 1,
+  "title": "My Talk",
+  "slideTheme": "regular",
+  "slideColorMode": "light",
+  "style": { "theme": "regular", "colorMode": "light" },
+  "fileStyles": {
+    "deck.md": { "theme": "regular", "colorMode": "light" }
+  },
+  "entryFile": "deck.md",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z"
+}
+\`\`\`
+
+Field rules:
+
+| Field | Required | Meaning |
+|-------|----------|---------|
+| \`version\` | yes | Format version — use \`1\` |
+| \`title\` | yes | Presentation title (export filenames, library list) |
+| \`entryFile\` | yes | Markdown path used for preview/export (e.g. \`deck.md\`) |
+| \`style\` | yes | Default theme for the entry file: \`{ "theme", "colorMode" }\` |
+| \`slideTheme\` / \`slideColorMode\` | yes | Same as \`style\` (kept in sync for older readers) |
+| \`fileStyles\` | yes | Per-\`.md\`-file themes, keyed by path relative to repo root |
+| \`createdAt\` / \`updatedAt\` | yes | ISO-8601 timestamps |
+
+**Theme ids:** \`regular\`, \`gray\`, \`blue\`, \`red\`, \`green\`, \`purple\`, \`bear-academy\`, \`the-beauties\`
+
+**Color modes:** \`light\` or \`dark\`
+
+**Per-file themes:** each \`.md\` file has one theme for all of its slides. Different markdown files in the same repo may use different themes via \`fileStyles\`:
+
+\`\`\`json
+"fileStyles": {
+  "deck.md": { "theme": "regular", "colorMode": "light" },
+  "talks/intro.md": { "theme": "bear-academy", "colorMode": "dark" }
+}
+\`\`\`
+
+When you add a new \`.md\` file, add a matching \`fileStyles\` entry (or Quick Slides will fall back to the default \`style\`). When you rename a \`.md\` file, rename the key in \`fileStyles\` and update \`entryFile\` if needed.
+
+Images in markdown should use relative paths under \`images/\`, for example \`![Alt](images/diagram.png)\`.
 
 ---
 
@@ -80,6 +153,7 @@ Explanation on the left.
 
 - Empty \`()\` shows a placeholder while loading or if the URL is missing.
 - Only the first image on a slide is used.
+- In a Quick Slides repo, prefer \`images/<filename>\` so assets sync with GitHub.
 
 ## Math (LaTeX)
 
@@ -122,7 +196,7 @@ $$\\\\sum_{i=1}^{n} i = \\\\frac{n(n+1)}{2}$$
 
 Brief caption on the left.
 
-![Diagram](https://example.com/diagram.png)
+![Diagram](images/diagram.png)
 \`\`\`
 
 ## Rules
@@ -133,7 +207,9 @@ Brief caption on the left.
 4. Keep slides concise; split long content across multiple slides.
 5. Put at most one image per slide; keep explanatory text on the left.
 6. Use display math (\`$$\`) for important equations; inline math (\`$\`) for short expressions.
-7. Output only the markdown deck unless the user asks for commentary.
+7. When scaffolding a GitHub (or library) deck, always include \`quick-slides.json\` with \`title\`, \`entryFile\`, \`style\`, and \`fileStyles\` for every \`.md\` deck file.
+8. One theme per \`.md\` file (via \`fileStyles\`); do not invent per-slide theme fields.
+9. Output only the markdown deck (and \`quick-slides.json\` when asked to set up a repo) unless the user asks for commentary.
 `;
 
 /** @deprecated Use QUICK_SLIDES_AI_INSTRUCTIONS */

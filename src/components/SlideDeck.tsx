@@ -31,11 +31,15 @@ type SlideDeckProps = {
 };
 
 export const SlideDeck = forwardRef<SlideDeckHandle, SlideDeckProps>(
-  function SlideDeck({ markdown, theme, colorMode = "light", onLocateEditor }, ref) {
+  function SlideDeck(
+    { markdown, theme, colorMode = "light", onLocateEditor },
+    ref,
+  ) {
     const language = useLanguage();
     const t = copy[language];
     const slides = splitSlides(markdown);
     const slideRefs = useRef<Array<HTMLElement | null>>([]);
+    const themeAttributes = getSlideThemeAttributes(theme);
 
     useImperativeHandle(ref, () => ({
       locateSlide: (slideIndex: number) => {
@@ -45,8 +49,6 @@ export const SlideDeck = forwardRef<SlideDeckHandle, SlideDeckProps>(
         });
       },
     }));
-
-    const themeAttributes = getSlideThemeAttributes(theme);
 
     return (
       <div className="flex flex-col gap-6">
@@ -79,7 +81,11 @@ export const SlideDeck = forwardRef<SlideDeckHandle, SlideDeckProps>(
                 )}
                 style={themeAttributes.style}
               >
-                <ScaledSlideFrame theme={theme} slideIndex={index} layout={layout}>
+                <ScaledSlideFrame
+                  theme={theme}
+                  slideIndex={index}
+                  layout={layout}
+                >
                   <SlideView markdown={slide} />
                 </ScaledSlideFrame>
               </div>

@@ -7,9 +7,6 @@ import {
 } from "@/lib/library/deckFormat";
 import {
   ensureSubdirectory,
-  readFileBlob,
-  readJsonFile,
-  readTextFile,
   writeBinaryFile,
   writeJsonFile,
   writeTextFile,
@@ -114,7 +111,12 @@ export function linkForDeckRepo(repo: GithubRepo, deckId: string): DeckGithubLin
 function remotePath(link: DeckGithubLink, relative: string): string {
   const prefix = link.pathPrefix?.trim();
   if (!prefix) return relative;
+  if (!relative) return prefix.replace(/\/+$/, "");
   return `${prefix.replace(/\/+$/, "")}/${relative}`;
+}
+
+export function deckRemotePath(link: DeckGithubLink, relative: string): string {
+  return remotePath(link, relative);
 }
 
 async function listLocalImageNames(
@@ -136,6 +138,8 @@ export async function pushDeckToGithub(options: {
   deckId: string;
   deckHandle: FileSystemDirectoryHandle;
   message?: string;
+  /** When set, only these relative paths are pushed (plus deletions for staged deletes). */
+  paths?: string[];
 }): Promise<{ commitMessages: string[] }> {
   const link = getDeckGithubLink(options.deckId);
   if (!link) throw new Error("This presentation is not linked to a GitHub repository");
@@ -144,74 +148,84 @@ export async function pushDeckToGithub(options: {
     options.message?.trim() ||
     `Update presentation (${new Date().toISOString()})`;
 
-  const markdown = (await readTextFile(options.deckHandle, DECK_MARKDOWN_FILE)) ?? "";
-  const metaRaw = await readJsonFile<unknown>(options.deckHandle, DECK_META_FILE);
-  const metaText =
-    metaRaw !== null
-      ? JSON.stringify(metaRaw, null, 2) + "\n"
-      : "{}\n";
+  const {
+    isTextPath,
+    listRepoFilePaths,
+    readRepoFileBytes,
+    readRepoTextFile,
+  } = await import("@/lib/github/workingTree");
+  const { listRemoteDeckFiles } = await import("@/lib/github/scmStatus");
 
+  const localPaths = options.paths?.length
+    ? options.paths
+    : await listRepoFilePaths(options.deckHandle);
+  const remoteFiles = await listRemoteDeckFiles(link);
   const commits: string[] = [];
 
-  const upsertText = async (relativePath: string, text: string) => {
-    const path = remotePath(link, relativePath);
-    const existing = await getFileContent(link.owner, link.repo, path, link.branch);
-    await putFile({
-      owner: link.owner,
-      repo: link.repo,
-      path,
-      contentBase64: encodeTextAsBase64(text),
-      message,
-      branch: link.branch,
-      sha: existing?.sha,
-    });
-    commits.push(path);
-  };
-
-  await upsertText(DECK_MARKDOWN_FILE, markdown);
-  await upsertText(DECK_META_FILE, metaText);
-
-  const localImages = await listLocalImageNames(options.deckHandle);
-  const remoteImages = await listDirectory(
-    link.owner,
-    link.repo,
-    remotePath(link, DECK_IMAGES_DIR),
-    link.branch,
-  );
-  const remoteByName = new Map(
-    remoteImages.filter((f) => f.type === "file").map((f) => [f.name, f]),
-  );
-
-  const imagesDir = await ensureSubdirectory(options.deckHandle, DECK_IMAGES_DIR);
-  for (const name of localImages) {
-    const blob = await readFileBlob(imagesDir, name);
-    if (!blob) continue;
-    const buffer = await blob.arrayBuffer();
-    const path = remotePath(link, `${DECK_IMAGES_DIR}/${name}`);
-    const existing = remoteByName.get(name);
-    await putFile({
-      owner: link.owner,
-      repo: link.repo,
-      path,
-      contentBase64: encodeBytesAsBase64(buffer),
-      message,
-      branch: link.branch,
-      sha: existing?.sha,
-    });
-    commits.push(path);
-    remoteByName.delete(name);
+  for (const relative of localPaths) {
+    const path = remotePath(link, relative);
+    if (isTextPath(relative)) {
+      const text = (await readRepoTextFile(options.deckHandle, relative)) ?? "";
+      const existing = await getFileContent(link.owner, link.repo, path, link.branch);
+      await putFile({
+        owner: link.owner,
+        repo: link.repo,
+        path,
+        contentBase64: encodeTextAsBase64(text),
+        message,
+        branch: link.branch,
+        sha: existing?.sha,
+      });
+      commits.push(path);
+    } else {
+      const buffer = await readRepoFileBytes(options.deckHandle, relative);
+      if (!buffer) continue;
+      const existing = await getFileContent(link.owner, link.repo, path, link.branch);
+      await putFile({
+        owner: link.owner,
+        repo: link.repo,
+        path,
+        contentBase64: encodeBytesAsBase64(buffer),
+        message,
+        branch: link.branch,
+        sha: existing?.sha,
+      });
+      commits.push(path);
+    }
+    remoteFiles.delete(relative);
   }
 
-  for (const leftover of remoteByName.values()) {
-    await deleteFile({
-      owner: link.owner,
-      repo: link.repo,
-      path: leftover.path,
-      message: `${message} (remove ${leftover.name})`,
-      branch: link.branch,
-      sha: leftover.sha,
-    });
-    commits.push(`delete:${leftover.path}`);
+  // Only delete remotes when doing a full push (no path filter), matching prior image cleanup
+  if (!options.paths) {
+    for (const [relative, leftover] of remoteFiles) {
+      await deleteFile({
+        owner: link.owner,
+        repo: link.repo,
+        path: leftover.path,
+        message: `${message} (remove ${leftover.name})`,
+        branch: link.branch,
+        sha: leftover.sha,
+      });
+      commits.push(`delete:${leftover.path}`);
+      void relative;
+    }
+  } else {
+    // Staged deletions: path listed but missing locally
+    const localSet = new Set(await listRepoFilePaths(options.deckHandle));
+    for (const relative of options.paths) {
+      if (localSet.has(relative)) continue;
+      const existing = remoteFiles.get(relative);
+      if (!existing) continue;
+      await deleteFile({
+        owner: link.owner,
+        repo: link.repo,
+        path: existing.path,
+        message: `${message} (remove ${existing.name})`,
+        branch: link.branch,
+        sha: existing.sha,
+      });
+      commits.push(`delete:${existing.path}`);
+    }
   }
 
   return { commitMessages: commits };
@@ -229,17 +243,6 @@ export async function pullDeckFromGithub(options: {
   const link = getDeckGithubLink(options.deckId);
   if (!link) throw new Error("This presentation is not linked to a GitHub repository");
 
-  const mdFile = await getFileContent(
-    link.owner,
-    link.repo,
-    remotePath(link, DECK_MARKDOWN_FILE),
-    link.branch,
-  );
-  if (!mdFile?.content) {
-    throw new Error("Remote repository has no deck.md");
-  }
-  const markdown = decodeBase64ToText(mdFile.content);
-
   const metaFile = await getFileContent(
     link.owner,
     link.repo,
@@ -255,7 +258,19 @@ export async function pullDeckFromGithub(options: {
     throw new Error("Remote repository has no quick-slides.json");
   }
 
-  await writeTextFile(options.deckHandle, DECK_MARKDOWN_FILE, markdown);
+  const entryFile = metadata.entryFile || DECK_MARKDOWN_FILE;
+  const mdFile = await getFileContent(
+    link.owner,
+    link.repo,
+    remotePath(link, entryFile),
+    link.branch,
+  );
+  if (!mdFile?.content) {
+    throw new Error(`Remote repository has no ${entryFile}`);
+  }
+  const markdown = decodeBase64ToText(mdFile.content);
+
+  await writeTextFile(options.deckHandle, entryFile, markdown);
   await writeJsonFile(options.deckHandle, DECK_META_FILE, metadata);
 
   const imagesDir = await ensureSubdirectory(options.deckHandle, DECK_IMAGES_DIR);

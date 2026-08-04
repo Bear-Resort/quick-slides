@@ -6,6 +6,7 @@ import {
   generateDeckFolderName,
   metadataToIndexEntry,
   parseDeckMetadata,
+  withDeckStyle,
   type DeckMetadata,
   type LibraryIndexEntry,
 } from "@/lib/library/deckFormat";
@@ -122,10 +123,15 @@ export async function loadDeck(
   const handle = await getDeckDirectory(root, folderName);
   if (!handle) return null;
 
-  const markdown = (await readTextFile(handle, DECK_MARKDOWN_FILE)) ?? "";
   const rawMeta = await readJsonFile<unknown>(handle, DECK_META_FILE);
   const metadata = parseDeckMetadata(rawMeta);
   if (!metadata) return null;
+
+  const entryFile = metadata.entryFile || DECK_MARKDOWN_FILE;
+  const markdown =
+    (await readTextFile(handle, entryFile)) ??
+    (await readTextFile(handle, DECK_MARKDOWN_FILE)) ??
+    "";
 
   const now = new Date().toISOString();
   await upsertLibraryIndexEntry(metadataToIndexEntry(folderName, metadata, now));
@@ -139,12 +145,18 @@ export async function saveDeck(
   markdown: string,
   metadata: DeckMetadata,
 ): Promise<DeckMetadata> {
-  const updated: DeckMetadata = {
-    ...metadata,
-    updatedAt: new Date().toISOString(),
-  };
+  const entryFile = metadata.entryFile || DECK_MARKDOWN_FILE;
+  const updated = withDeckStyle(
+    {
+      ...metadata,
+      entryFile,
+      updatedAt: new Date().toISOString(),
+    },
+    metadata.slideTheme,
+    metadata.slideColorMode,
+  );
 
-  await writeTextFile(handle, DECK_MARKDOWN_FILE, markdown);
+  await writeTextFile(handle, entryFile, markdown);
   await writeJsonFile(handle, DECK_META_FILE, updated);
   await upsertLibraryIndexEntry(metadataToIndexEntry(folderName, updated));
 
@@ -157,7 +169,8 @@ export async function updateDeckTitle(
   metadata: DeckMetadata,
   title: string,
 ): Promise<DeckMetadata> {
-  return saveDeck(handle, folderName, await readTextFile(handle, DECK_MARKDOWN_FILE) ?? "", {
+  const entryFile = metadata.entryFile || DECK_MARKDOWN_FILE;
+  return saveDeck(handle, folderName, (await readTextFile(handle, entryFile)) ?? "", {
     ...metadata,
     title: title.trim() || metadata.title,
   });

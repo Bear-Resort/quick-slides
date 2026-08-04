@@ -4,10 +4,15 @@ import {
   ArrowUp,
   Github,
   LogOut,
+  Minus,
+  Plus,
   RefreshCw,
+  RotateCcw,
   Search,
+  X,
 } from "lucide-react";
 import { WorkspacePanel } from "@/components/WorkspacePanel";
+import { DialogPortal } from "@/components/ui/dialog-portal";
 import { createRepo, getOrCreateSharedLibraryRepo, listRepos, SHARED_LIBRARY_REPO_NAME, type GithubRepo } from "@/lib/github/api";
 import {
   getAuthStatus,
@@ -31,6 +36,19 @@ import {
   type PulledDeck,
 } from "@/lib/github/deckSync";
 import {
+  clearStaged,
+  getStagedPaths,
+  stageAll,
+  stagePath,
+  unstageAll,
+  unstagePath,
+} from "@/lib/github/staging";
+import {
+  computeScmChanges,
+  revertFileFromRemote,
+  type ScmFileChange,
+} from "@/lib/github/scmStatus";
+import {
   createDeck,
   ensureBrowserLibraryRoot,
 } from "@/lib/library/deckStorage";
@@ -51,6 +69,10 @@ type GitPanelProps = {
   onPulled?: (deck: PulledDeck) => void;
   /** Called after a repo is linked to a newly created (or existing) presentation. */
   onDeckLinked?: (deckId: string) => void;
+  onOpenFile?: (path: string) => void;
+  onScmChanged?: () => void;
+  /** Bump to force SCM refresh from the editor. */
+  scmEpoch?: number;
 };
 
 const copy = {
@@ -106,6 +128,21 @@ const copy = {
       "Set VITE_GITHUB_CLIENT_ID in .env.local to enable GitHub sign-in.",
     createDeckFailed: "Could not create a local presentation for this repository.",
     emptyRepos: "No repositories found.",
+    changes: "Changes",
+    staged: "Included for push",
+    unstaged: "Changes",
+    includeFile: "Include file",
+    excludeFile: "Exclude",
+    revertFile: "Revert file",
+    includeAll: "Include all",
+    excludeAll: "Exclude all",
+    pushIncluded: "Push included",
+    noChanges: "No changes — working tree clean.",
+    statusLetter: {
+      modified: "M",
+      untracked: "N",
+      deleted: "D",
+    },
   },
   zh: {
     githubTitle: "GitHub",
@@ -156,6 +193,21 @@ const copy = {
     noClientId: "请在 .env.local 中设置 VITE_GITHUB_CLIENT_ID 以启用 GitHub 登录。",
     createDeckFailed: "无法为此仓库创建本地演示文稿。",
     emptyRepos: "未找到仓库。",
+    changes: "更改",
+    staged: "已纳入推送",
+    unstaged: "更改",
+    includeFile: "纳入文件",
+    excludeFile: "取消纳入",
+    revertFile: "还原文件",
+    includeAll: "全部纳入",
+    excludeAll: "全部取消",
+    pushIncluded: "推送已纳入",
+    noChanges: "没有更改 — 工作区干净。",
+    statusLetter: {
+      modified: "M",
+      untracked: "N",
+      deleted: "D",
+    },
   },
 } as const;
 
@@ -179,6 +231,9 @@ export function GitPanel({
   onOpenGithub,
   onPulled,
   onDeckLinked,
+  onOpenFile,
+  onScmChanged,
+  scmEpoch = 0,
 }: GitPanelProps) {
   const language = useLanguage();
   const t = copy[language];
@@ -199,6 +254,8 @@ export function GitPanel({
   const [showTokenForm, setShowTokenForm] = useState(false);
   const [newRepoName, setNewRepoName] = useState("");
   const [newRepoPrivate, setNewRepoPrivate] = useState(true);
+  const [createRepoOpen, setCreateRepoOpen] = useState(false);
+  const [scmChanges, setScmChanges] = useState<ScmFileChange[]>([]);
 
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollCancelledRef = useRef(false);
@@ -231,6 +288,24 @@ export function GitPanel({
     }
   }, []);
 
+  const refreshScm = useCallback(async () => {
+    if (!deckId || !deckHandle || !getDeckGithubLink(deckId)) {
+      setScmChanges([]);
+      return;
+    }
+    try {
+      const staged = getStagedPaths(deckId);
+      const { changes } = await computeScmChanges({
+        deckId,
+        deckHandle,
+        staged,
+      });
+      setScmChanges(changes);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [deckId, deckHandle]);
+
   useEffect(() => {
     if (!open) {
       clearPoll();
@@ -238,6 +313,7 @@ export function GitPanel({
     }
     setError(null);
     setInfo(null);
+    setCreateRepoOpen(false);
     setAuth(getAuthStatus());
     setLink(deckId ? getDeckGithubLink(deckId) : null);
     setNewRepoName(defaultRepoName(deckTitle));
@@ -249,12 +325,29 @@ export function GitPanel({
     if (isGithub && getAuthStatus().signedIn) {
       void loadRepos();
     }
+    if (!isGithub) {
+      void refreshScm();
+    }
 
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       clearPoll();
     };
-  }, [open, onClose, clearPoll, deckId, deckTitle, isGithub, loadRepos]);
+  }, [
+    open,
+    onClose,
+    clearPoll,
+    deckId,
+    deckTitle,
+    isGithub,
+    loadRepos,
+    refreshScm,
+  ]);
+
+  useEffect(() => {
+    if (!open || isGithub) return;
+    void refreshScm();
+  }, [open, isGithub, scmEpoch, refreshScm]);
 
   const ensureDeckForLink = async (preferredTitle?: string): Promise<string> => {
     if (deckId) return deckId;
@@ -398,6 +491,7 @@ export function GitPanel({
       setDeckGithubLink(id, next);
       setLink(next);
       setInfo(`${t.linked}: ${formatDeckGithubLinkLabel(next)}`);
+      setCreateRepoOpen(false);
       await loadRepos();
       onDeckLinked?.(id);
     } catch (err) {
@@ -419,6 +513,7 @@ export function GitPanel({
       setDeckGithubLink(id, next);
       setLink(next);
       setInfo(`${t.linked}: ${formatDeckGithubLinkLabel(next)}`);
+      setCreateRepoOpen(false);
       await loadRepos();
       onDeckLinked?.(id);
     } catch (err) {
@@ -434,12 +529,54 @@ export function GitPanel({
     setError(null);
     setInfo(null);
     try {
+      const staged = [...getStagedPaths(deckId)];
+      const paths = staged.length > 0 ? staged : undefined;
+      if (staged.length === 0 && scmChanges.length > 0) {
+        // Push all changed + existing tracked content when nothing included
+      }
       await pushDeckToGithub({
         deckId,
         deckHandle,
         message: message || undefined,
+        paths,
       });
+      if (staged.length > 0) clearStaged(deckId);
       setInfo(t.pushOk);
+      await refreshScm();
+      onScmChanged?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleInclude = async (path: string) => {
+    if (!deckId) return;
+    stagePath(deckId, path);
+    await refreshScm();
+    onScmChanged?.();
+  };
+
+  const handleExclude = async (path: string) => {
+    if (!deckId) return;
+    unstagePath(deckId, path);
+    await refreshScm();
+    onScmChanged?.();
+  };
+
+  const handleRevert = async (path: string) => {
+    if (!deckId || !deckHandle) return;
+    if (!window.confirm(`Revert “${path}”? Local changes will be lost.`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await revertFileFromRemote({ deckId, deckHandle, path });
+      unstagePath(deckId, path);
+      await refreshScm();
+      onScmChanged?.();
+      onOpenFile?.(path);
+      setInfo(`${t.revertFile}: ${path}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -456,6 +593,8 @@ export function GitPanel({
       const pulled = await pullDeckFromGithub({ deckId, deckHandle });
       onPulled?.(pulled);
       setInfo(t.pullOk);
+      await refreshScm();
+      onScmChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -610,82 +749,20 @@ export function GitPanel({
                   <p className="text-xs text-muted-foreground">{t.chooseRepo}</p>
                 )}
 
-                <div className="space-y-2 rounded-lg border border-white/10 p-3">
-                  <p className="text-xs font-semibold tracking-wide text-muted-foreground">
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setNewRepoName(defaultRepoName(deckTitle));
+                      setNewRepoPrivate(true);
+                      setCreateRepoOpen(true);
+                    }}
+                    className="glass-toolbar-action inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                  >
+                    <Plus className="size-3.5" aria-hidden />
                     {t.createOptions}
-                  </p>
-
-                  <div className="space-y-2 rounded-md border border-white/10 p-2.5">
-                    <p className="text-xs font-semibold">{t.createCustom}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {t.createCustomHint}
-                    </p>
-                    <label className="block space-y-1">
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        {t.repoName}
-                      </span>
-                      <input
-                        value={newRepoName}
-                        onChange={(event) => setNewRepoName(event.target.value)}
-                        placeholder={defaultRepoName(deckTitle)}
-                        className="w-full rounded-md border border-white/15 bg-transparent px-2.5 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      />
-                    </label>
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        {t.visibility}
-                      </span>
-                      <div className="grid grid-cols-2 gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setNewRepoPrivate(true)}
-                          className={cn(
-                            "rounded-md border px-2 py-1.5 text-xs font-semibold",
-                            newRepoPrivate
-                              ? "border-white/30 bg-white/12"
-                              : "border-white/10 text-muted-foreground",
-                          )}
-                        >
-                          {t.visibilityPrivate}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setNewRepoPrivate(false)}
-                          className={cn(
-                            "rounded-md border px-2 py-1.5 text-xs font-semibold",
-                            !newRepoPrivate
-                              ? "border-white/30 bg-white/12"
-                              : "border-white/10 text-muted-foreground",
-                          )}
-                        >
-                          {t.visibilityPublic}
-                        </button>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={busy || !newRepoName.trim()}
-                      onClick={() => void handleCreateCustomRepo()}
-                      className="glass-toolbar-action w-full rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
-                    >
-                      {t.createCustomAction}
-                    </button>
-                  </div>
-
-                  <div className="space-y-2 rounded-md border border-white/10 p-2.5">
-                    <p className="text-xs font-semibold">{t.createLibrary}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {t.createLibraryHint}
-                    </p>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void handleUseSharedLibrary()}
-                      className="glass-primary w-full rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
-                    >
-                      {t.createLibraryAction}
-                    </button>
-                  </div>
+                  </button>
                 </div>
 
                 <p className="text-xs font-semibold tracking-wide text-muted-foreground">
@@ -791,7 +868,9 @@ export function GitPanel({
             ) : (
               <>
                 <div className="rounded-lg border border-white/10 px-3 py-2 text-xs">
-                  <p className="font-medium">{link.fullName}</p>
+                  <p className="font-medium">
+                    {formatDeckGithubLinkLabel(link)}
+                  </p>
                   <p className="text-muted-foreground">
                     {t.branch}: {link.branch}
                   </p>
@@ -824,14 +903,252 @@ export function GitPanel({
                     className="glass-primary inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-50"
                   >
                     <ArrowUp className="size-3.5" aria-hidden />
-                    {busy ? t.pushing : t.push}
+                    {busy
+                      ? t.pushing
+                      : scmChanges.some((c) => c.staged)
+                        ? t.pushIncluded
+                        : t.push}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void refreshScm()}
+                    className="glass-toolbar-action inline-flex size-9 items-center justify-center rounded-lg border border-white/15 disabled:opacity-50"
+                    title={t.refresh}
+                  >
+                    <RefreshCw className="size-3.5" aria-hidden />
                   </button>
                 </div>
+
+                {scmChanges.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">{t.noChanges}</p>
+                ) : (
+                  <div className="flex min-h-0 flex-1 flex-col gap-3">
+                    {(["staged", "unstaged"] as const).map((section) => {
+                      const rows =
+                        section === "staged"
+                          ? scmChanges.filter((c) => c.staged)
+                          : scmChanges.filter((c) => !c.staged);
+                      if (rows.length === 0 && section === "staged") return null;
+                      return (
+                        <div key={section} className="min-h-0 flex-1 space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs font-semibold tracking-wide text-muted-foreground">
+                              {section === "staged" ? t.staged : t.unstaged}
+                            </p>
+                            {section === "unstaged" ? (
+                              <button
+                                type="button"
+                                className="text-[10px] font-semibold text-muted-foreground underline"
+                                onClick={() => {
+                                  if (!deckId) return;
+                                  stageAll(
+                                    deckId,
+                                    scmChanges.map((c) => c.path),
+                                  );
+                                  void refreshScm().then(() => onScmChanged?.());
+                                }}
+                              >
+                                {t.includeAll}
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="text-[10px] font-semibold text-muted-foreground underline"
+                                onClick={() => {
+                                  if (!deckId) return;
+                                  unstageAll(deckId);
+                                  void refreshScm().then(() => onScmChanged?.());
+                                }}
+                              >
+                                {t.excludeAll}
+                              </button>
+                            )}
+                          </div>
+                          <ul className="max-h-48 overflow-y-auto rounded-lg border border-white/10 divide-y divide-white/10">
+                            {rows.length === 0 ? (
+                              <li className="px-3 py-4 text-center text-[11px] text-muted-foreground">
+                                {t.noChanges}
+                              </li>
+                            ) : (
+                              rows.map((change) => (
+                                <li
+                                  key={`${section}-${change.path}`}
+                                  className="flex items-center gap-2 px-2 py-1.5"
+                                >
+                                  <span
+                                    className={cn(
+                                      "inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold",
+                                      change.status === "untracked" &&
+                                        "bg-emerald-500 text-white",
+                                      change.status === "modified" &&
+                                        "bg-amber-400 text-amber-950",
+                                      change.status === "deleted" &&
+                                        "bg-rose-500 text-white",
+                                    )}
+                                  >
+                                    {t.statusLetter[change.status]}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="min-w-0 flex-1 truncate text-left text-xs font-medium hover:underline"
+                                    onClick={() => onOpenFile?.(change.path)}
+                                  >
+                                    {change.path}
+                                  </button>
+                                  {section === "unstaged" ? (
+                                    <button
+                                      type="button"
+                                      title={t.includeFile}
+                                      className="glass-toolbar-action inline-flex size-6 items-center justify-center rounded border border-white/15"
+                                      onClick={() => void handleInclude(change.path)}
+                                    >
+                                      <Plus className="size-3" />
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      title={t.excludeFile}
+                                      className="glass-toolbar-action inline-flex size-6 items-center justify-center rounded border border-white/15"
+                                      onClick={() => void handleExclude(change.path)}
+                                    >
+                                      <Minus className="size-3" />
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    title={t.revertFile}
+                                    className="glass-toolbar-action inline-flex size-6 items-center justify-center rounded border border-white/15"
+                                    onClick={() => void handleRevert(change.path)}
+                                  >
+                                    <RotateCcw className="size-3" />
+                                  </button>
+                                </li>
+                              ))
+                            )}
+                          </ul>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </>
             )}
           </>
         )}
       </div>
+
+      {createRepoOpen ? (
+        <DialogPortal>
+          <div
+            className="fixed inset-0 z-[300] flex items-center justify-center bg-black/35 p-4 backdrop-blur-[3px]"
+            onClick={() => setCreateRepoOpen(false)}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="create-repo-title"
+              className="glass-panel glass-panel-dialog relative z-[301] flex max-h-[min(90vh,560px)] w-full max-w-md flex-col overflow-hidden rounded-xl border shadow-lg"
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setCreateRepoOpen(false);
+              }}
+            >
+              <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3">
+                <h2
+                  id="create-repo-title"
+                  className="text-sm font-semibold tracking-wide"
+                >
+                  {t.createOptions}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setCreateRepoOpen(false)}
+                  className="glass-toolbar-action inline-flex size-7 items-center justify-center rounded-md border border-white/15"
+                  aria-label="Close"
+                >
+                  <X className="size-3.5" aria-hidden />
+                </button>
+              </div>
+
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+                <div className="space-y-2 rounded-lg border border-white/10 p-3">
+                  <p className="text-xs font-semibold">{t.createCustom}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {t.createCustomHint}
+                  </p>
+                  <label className="block space-y-1">
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      {t.repoName}
+                    </span>
+                    <input
+                      value={newRepoName}
+                      onChange={(event) => setNewRepoName(event.target.value)}
+                      placeholder={defaultRepoName(deckTitle)}
+                      className="w-full rounded-md border border-white/15 bg-transparent px-2.5 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      autoFocus
+                    />
+                  </label>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      {t.visibility}
+                    </span>
+                    <div className="grid grid-cols-2 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setNewRepoPrivate(true)}
+                        className={cn(
+                          "rounded-md border px-2 py-1.5 text-xs font-semibold",
+                          newRepoPrivate
+                            ? "border-white/30 bg-white/12"
+                            : "border-white/10 text-muted-foreground",
+                        )}
+                      >
+                        {t.visibilityPrivate}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewRepoPrivate(false)}
+                        className={cn(
+                          "rounded-md border px-2 py-1.5 text-xs font-semibold",
+                          !newRepoPrivate
+                            ? "border-white/30 bg-white/12"
+                            : "border-white/10 text-muted-foreground",
+                        )}
+                      >
+                        {t.visibilityPublic}
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={busy || !newRepoName.trim()}
+                    onClick={() => void handleCreateCustomRepo()}
+                    className="glass-toolbar-action w-full rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+                  >
+                    {t.createCustomAction}
+                  </button>
+                </div>
+
+                <div className="space-y-2 rounded-lg border border-white/10 p-3">
+                  <p className="text-xs font-semibold">{t.createLibrary}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {t.createLibraryHint}
+                  </p>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void handleUseSharedLibrary()}
+                    className="glass-primary w-full rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+                  >
+                    {t.createLibraryAction}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </DialogPortal>
+      ) : null}
     </WorkspacePanel>
   );
 }

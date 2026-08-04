@@ -34,6 +34,8 @@ const copy = {
 type StyleSelectorProps = {
   value: SlideThemeId;
   colorMode: SlideColorMode;
+  /** Which markdown file this theme applies to. */
+  fileLabel?: string;
   onChange: (themeId: SlideThemeId) => void;
   onColorModeChange: (mode: SlideColorMode) => void;
 };
@@ -106,6 +108,7 @@ function ThemeDialog({
   onClose,
   value,
   colorMode,
+  fileLabel,
   onChange,
   onColorModeChange,
 }: StyleSelectorProps & { open: boolean; onClose: () => void }) {
@@ -146,9 +149,16 @@ function ThemeDialog({
           onClick={(event) => event.stopPropagation()}
         >
           <div className="glass-divider relative z-[1] flex shrink-0 items-center justify-between border-b px-5 py-3.5">
-            <h2 id="quick-slides-theme-title" className="text-base font-semibold">
-              {t.dialogTitle}
-            </h2>
+            <div className="min-w-0">
+              <h2 id="quick-slides-theme-title" className="text-base font-semibold">
+                {t.dialogTitle}
+              </h2>
+              {fileLabel ? (
+                <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+                  {fileLabel}
+                </p>
+              ) : null}
+            </div>
             <Button
               variant="ghost"
               size="icon"
@@ -231,6 +241,7 @@ function ThemeDialog({
 export function StyleSelector({
   value,
   colorMode,
+  fileLabel,
   onChange,
   onColorModeChange,
 }: StyleSelectorProps) {
@@ -253,6 +264,7 @@ export function StyleSelector({
         onClose={() => setOpen(false)}
         value={value}
         colorMode={colorMode}
+        fileLabel={fileLabel}
         onChange={onChange}
         onColorModeChange={onColorModeChange}
       />

@@ -1,6 +1,7 @@
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useLayoutEffect,
   useMemo,
@@ -27,9 +28,17 @@ import {
   type CharRangePosition,
   type InsertTemplateKey,
 } from "@/lib/editorInsert";
+import type { ScmLineChange } from "@/lib/github/lineDiff";
 import { getSlideNavigation } from "@/lib/slideMarkers";
 import { useLanguage } from "@/lib/useLanguage";
 import { cn } from "@/lib/utils";
+import {
+  editorFontFamilyClass,
+  editorFontSizeClass,
+  getEditorFontFamily,
+  getEditorFontSize,
+  subscribeEditorSettings,
+} from "@/lib/editorSettings";
 
 const copy = {
   en: {
@@ -41,10 +50,6 @@ const copy = {
     locate: "定位",
   },
 } as const;
-
-const EDITOR_TEXT_CLASS =
-  "font-mono text-sm leading-relaxed [font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace]";
-
 type LinePosition = {
   top: number;
   height: number;
@@ -53,6 +58,8 @@ type LinePosition = {
 export type MarkdownEditorHandle = {
   locateLine: (lineIndex: number) => void;
   focus: () => void;
+  undo: () => void;
+  redo: () => void;
 };
 
 type MarkdownEditorProps = {
@@ -61,6 +68,9 @@ type MarkdownEditorProps = {
   onLocateSlide: (slideIndex: number) => void;
   placeholder?: string;
   className?: string;
+  showLineNumbers?: boolean;
+  scmLineChanges?: ScmLineChange[];
+  readOnly?: boolean;
 };
 
 function getLineCharIndex(lines: string[], lineIndex: number): number {
@@ -129,11 +139,39 @@ function syncMirrorLayout(textarea: HTMLTextAreaElement, mirror: HTMLDivElement)
 
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
   function MarkdownEditor(
-    { value, onChange, onLocateSlide, placeholder, className },
+    {
+      value,
+      onChange,
+      onLocateSlide,
+      placeholder,
+      className,
+      showLineNumbers = false,
+      scmLineChanges = [],
+      readOnly = false,
+    },
     ref,
   ) {
     const language = useLanguage();
     const t = copy[language];
+    const [fontSize, setFontSize] = useState(() => getEditorFontSize());
+    const [fontFamily, setFontFamily] = useState(() => getEditorFontFamily());
+    const editorTextClass = useMemo(
+      () =>
+        cn(
+          "leading-relaxed",
+          editorFontSizeClass(fontSize),
+          editorFontFamilyClass(fontFamily),
+        ),
+      [fontSize, fontFamily],
+    );
+
+    useEffect(() => {
+      return subscribeEditorSettings(() => {
+        setFontSize(getEditorFontSize());
+        setFontFamily(getEditorFontFamily());
+      });
+    }, []);
+
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const mirrorRef = useRef<HTMLDivElement>(null);
     const editorStateRef = useRef({ selectionStart: 0, selectionEnd: 0, scrollTop: 0 });
@@ -176,6 +214,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       if (showInsertControl) {
         lineIndices.push(cursorLine);
       }
+      if (showLineNumbers || scmLineChanges.length > 0) {
+        for (let i = 0; i < lines.length; i += 1) lineIndices.push(i);
+      }
       setLinePositions(measureLinePositions(mirror, lines, lineIndices));
 
       const slotPositions = new Map<number, CharRangePosition>();
@@ -197,7 +238,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         }
       }
       setPlaceholderPositions(phPositions);
-    }, [value, lines, navigation.separators, showInsertControl, cursorLine, imageSlots, placeholderSlots]);
+    }, [value, lines, navigation.separators, showInsertControl, cursorLine, imageSlots, placeholderSlots, showLineNumbers, scmLineChanges, editorTextClass]);
 
     useLayoutEffect(() => {
       remeasure();
@@ -330,6 +371,18 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     useImperativeHandle(ref, () => ({
       locateLine,
       focus: () => textareaRef.current?.focus(),
+      undo: () => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.focus({ preventScroll: true });
+        document.execCommand("undo");
+      },
+      redo: () => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.focus({ preventScroll: true });
+        document.execCommand("redo");
+      },
     }), [locateLine]);
 
     const handleLocateSlide = (separatorLine: number) => {
@@ -339,13 +392,36 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     };
 
     const cursorLinePosition = linePositions.get(cursorLine);
+    const insertColWidth = 22;
+    const lineColWidth = showLineNumbers ? 28 : 0;
+    const gutterWidth = insertColWidth + (lineColWidth || (scmLineChanges.length > 0 ? 12 : 0));
+    const padClass =
+      showLineNumbers || scmLineChanges.length > 0
+        ? "pl-[3.25rem]"
+        : "pl-10";
+
+    const scmByLine = useMemo(() => {
+      const map = new Map<number, "added" | "modified" | "deleted">();
+      for (const change of scmLineChanges) {
+        for (let line = change.startLine; line <= change.endLine; line += 1) {
+          const idx = line - 1;
+          const prev = map.get(idx);
+          if (change.kind === "deleted") map.set(idx, "deleted");
+          else if (change.kind === "modified" && prev !== "deleted") map.set(idx, "modified");
+          else if (change.kind === "added" && !prev) map.set(idx, "added");
+        }
+      }
+      return map;
+    }, [scmLineChanges]);
 
     return (
       <div className={cn("relative min-h-0 flex-1 overflow-hidden html-scroll-area", className)}>
         <textarea
           ref={textareaRef}
           value={value}
+          readOnly={readOnly}
           onChange={(event) => {
+            if (readOnly) return;
             onChange(event.target.value);
             updateCursorLine();
           }}
@@ -371,10 +447,12 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           placeholder={placeholder}
           spellCheck={false}
           className={cn(
-            "absolute inset-0 z-0 w-full resize-none overflow-y-auto bg-transparent px-4 py-4 pl-10 pr-4 outline-none",
+            "absolute inset-0 z-0 w-full resize-none overflow-y-auto bg-transparent px-4 py-4 pr-4 outline-none",
+            padClass,
             "no-native-scrollbar whitespace-pre-wrap break-words",
             "focus-visible:ring-1 focus-visible:ring-ring",
-            EDITOR_TEXT_CLASS,
+            readOnly && "cursor-default opacity-90",
+            editorTextClass,
           )}
         />
 
@@ -390,8 +468,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           aria-hidden
           className={cn(
             "pointer-events-none absolute left-0 top-0 -z-10 opacity-0",
-            "box-border px-4 py-4 pl-10",
-            EDITOR_TEXT_CLASS,
+            "box-border px-4 py-4",
+            padClass,
+            editorTextClass,
           )}
         />
 
@@ -404,6 +483,49 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             className="relative h-full w-full"
             style={{ transform: `translateY(-${scrollTop}px)` }}
           >
+            {(showLineNumbers || scmLineChanges.length > 0) &&
+              lines.map((_, lineIndex) => {
+                const position = linePositions.get(lineIndex);
+                if (!position) return null;
+                const scm = scmByLine.get(lineIndex);
+                return (
+                  <div
+                    key={`gutter-${lineIndex}`}
+                    className="absolute left-0 flex items-stretch"
+                    style={{
+                      top: position.top,
+                      height: position.height,
+                      width: gutterWidth,
+                    }}
+                  >
+                    {scm ? (
+                      <span
+                        className={cn(
+                          "absolute left-0 top-0 bottom-0 w-[3px]",
+                          scm === "added" && "bg-emerald-500",
+                          scm === "modified" && "bg-amber-400",
+                          scm === "deleted" && "bg-rose-500",
+                          scm === "deleted" &&
+                            "before:absolute before:left-0 before:top-0 before:border-l-[6px] before:border-b-[6px] before:border-l-transparent before:border-b-rose-500",
+                        )}
+                        title={scm}
+                      />
+                    ) : null}
+                    {showLineNumbers ? (
+                      <span
+                        className={cn(
+                          "w-full pr-2 text-right text-[10px] tabular-nums leading-[inherit] text-muted-foreground/70",
+                          lineIndex === cursorLine && "text-muted-foreground",
+                        )}
+                        style={{ paddingLeft: insertColWidth }}
+                      >
+                        {lineIndex + 1}
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              })}
+
             <EditorImageUploadButtons
               slots={imageSlots}
               positions={imageSlotPositions}
@@ -419,8 +541,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
 
             {showInsertControl && cursorLinePosition && (
               <div
-                className="pointer-events-auto absolute left-1 flex items-center"
+                className="pointer-events-auto absolute flex items-center justify-center"
                 style={{
+                  left: 2,
+                  width: insertColWidth,
                   top: cursorLinePosition.top,
                   height: cursorLinePosition.height,
                 }}

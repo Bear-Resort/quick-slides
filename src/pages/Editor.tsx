@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { HtmlScrollbarArea } from "@/components/HtmlScrollbar";
 import { FilesPanel } from "@/components/FilesPanel";
-import { GitPanel, type GitPanelVariant } from "@/components/GitPanel";
-import { Header } from "@/components/Header";
+import { GitPanel } from "@/components/GitPanel";
+import { Header, type WorkspaceMode } from "@/components/Header";
 import { SlideActions } from "@/components/SlideActions";
 import {
   MarkdownEditor,
@@ -13,6 +13,7 @@ import type { SaveStatus } from "@/components/EditorDocumentHeader";
 import { SlideDeck, type SlideDeckHandle } from "@/components/SlideDeck";
 import { SlidePresenter } from "@/components/SlidePresenter";
 import { StyleSelector } from "@/components/StyleSelector";
+import { DialogPortal } from "@/components/ui/dialog-portal";
 import { DeckProvider } from "@/context/DeckContext";
 import { getSlideNavigation } from "@/lib/slideMarkers";
 import { SAMPLE_MARKDOWN } from "@/lib/markdown";
@@ -21,33 +22,106 @@ import {
   revokeAllDeckImageUrls,
   storeDeckImage,
 } from "@/lib/library/deckImages";
-import type { DeckMetadata } from "@/lib/library/deckFormat";
 import {
+  DECK_MARKDOWN_FILE,
+  DECK_META_FILE,
+  resolveFileStyle,
+  withFileStyle,
+  type DeckMetadata,
+} from "@/lib/library/deckFormat";
+import {
+  connectLibraryRoot,
+  ensureBrowserLibraryRoot,
   getLibraryRoot,
   loadDeck,
   saveDeck,
 } from "@/lib/library/deckStorage";
 import { bootstrapLibrary } from "@/lib/library/libraryBootstrap";
-import type { PulledDeck } from "@/lib/github/deckSync";
+import { getDeckGithubLink, formatDeckGithubLinkLabel, type PulledDeck } from "@/lib/github/deckSync";
+import { computeLineChanges, type ScmLineChange } from "@/lib/github/lineDiff";
+import { getRemoteText, computeScmChanges, revertFileFromRemote, type FileScmKind } from "@/lib/github/scmStatus";
+import { stagePath, unstagePath } from "@/lib/github/staging";
+import {
+  createRepoFile,
+  createRepoFolder,
+  isTextPath,
+  listRepoFileTree,
+  readRepoTextFile,
+  renameRepoPath,
+  writeRepoTextFile,
+  type RepoFileEntry,
+} from "@/lib/github/workingTree";
 import {
   getDefaultPresentationFilename,
   getPresentationFilename,
 } from "@/lib/presentationFilename";
+import {
+  isDiskFolderPickerSupported,
+  pickCustomLibraryRoot,
+} from "@/lib/library/fsAccess";
+import {
+  DEFAULT_LIBRARY_DISPLAY_PATH,
+  getLibraryDisplayPath,
+} from "@/lib/library/libraryPaths";
+import { getLibraryPreference } from "@/lib/library/libraryPreference";
 import type { SlideColorMode, SlideThemeId } from "@/lib/slideThemes";
 import { useLanguage } from "@/lib/useLanguage";
+import {
+  getAutosaveDelayMs,
+  subscribeEditorSettings,
+} from "@/lib/editorSettings";
+
+const MODE_KEY = "quick-slides.workspace-mode";
+
+function readWorkspaceMode(): WorkspaceMode {
+  try {
+    const raw = localStorage.getItem(MODE_KEY);
+    if (raw === "browser" || raw === "disk" || raw === "git") return raw;
+  } catch {
+    // ignore
+  }
+  return getLibraryPreference() === "custom" ? "disk" : "browser";
+}
+
+function writeWorkspaceMode(mode: WorkspaceMode): void {
+  localStorage.setItem(MODE_KEY, mode);
+}
+
+function isMarkdownPath(path: string): boolean {
+  return path.toLowerCase().endsWith(".md");
+}
+
+function fileBasename(path: string): string {
+  const parts = path.split("/");
+  return parts[parts.length - 1] || path;
+}
 
 const copy = {
   en: {
     placeholder: "Write markdown here. Separate slides with --- on its own line.",
     slides: "Slides",
-    source: "Markdown Editor",
     loadFailed: "Could not open this presentation.",
+    readOnly: "Read-only",
+    editable: "Editable",
+    unlock: "Unlock to edit",
+    unlockTitle: "Edit JSON file?",
+    unlockBody:
+      "Modifying JSON files may break down the repository setup (themes, metadata, and sync). Continue only if you know what you are changing.",
+    unlockConfirm: "Unlock and edit",
+    unlockCancel: "Keep read-only",
   },
   zh: {
     placeholder: "在此编写 Markdown。用单独一行的 --- 分隔幻灯片。",
     slides: "幻灯片",
-    source: "Markdown 编辑器",
     loadFailed: "无法打开此演示文稿。",
+    readOnly: "只读",
+    editable: "可编辑",
+    unlock: "解锁编辑",
+    unlockTitle: "编辑 JSON 文件？",
+    unlockBody:
+      "修改 JSON 文件可能会破坏仓库结构（主题、元数据与同步）。请仅在清楚改动内容时继续。",
+    unlockConfirm: "解锁并编辑",
+    unlockCancel: "保持只读",
   },
 };
 
@@ -71,8 +145,27 @@ export function Editor() {
   const [metadata, setMetadata] = useState<DeckMetadata | null>(null);
   const [ephemeralTitle, setEphemeralTitle] = useState(() => getPresentationFilename());
   const [workspacePanel, setWorkspacePanel] = useState<
-    "files" | GitPanelVariant | null
+    "files" | "vcs" | "github" | null
   >(() => (deckId ? null : "files"));
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() =>
+    readWorkspaceMode(),
+  );
+  const [libraryDisplayPath, setLibraryDisplayPath] = useState(
+    DEFAULT_LIBRARY_DISPLAY_PATH,
+  );
+  const [activeFilePath, setActiveFilePath] = useState(DECK_MARKDOWN_FILE);
+  const [fileTree, setFileTree] = useState<RepoFileEntry[]>([]);
+  const [scmByPath, setScmByPath] = useState<Record<string, FileScmKind>>({});
+  const [scmLineChanges, setScmLineChanges] = useState<ScmLineChange[]>([]);
+  const [scmEpoch, setScmEpoch] = useState(0);
+  const [auxFileText, setAuxFileText] = useState("");
+  const [jsonUnlocked, setJsonUnlocked] = useState(false);
+  const [jsonUnlockOpen, setJsonUnlockOpen] = useState(false);
+  const isLinked = Boolean(deckId && getDeckGithubLink(deckId));
+  const editingMarkdown = isMarkdownPath(activeFilePath);
+  const isJsonFile = activeFilePath.toLowerCase().endsWith(".json");
+  const jsonReadOnly = isJsonFile && !jsonUnlocked;
+  const entryFile = metadata?.entryFile ?? DECK_MARKDOWN_FILE;
 
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const slideDeckRef = useRef<SlideDeckHandle>(null);
@@ -81,14 +174,109 @@ export function Editor() {
   const deckHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
   const folderNameRef = useRef<string | null>(null);
   const skipNextAutosaveRef = useRef(true);
+  const workspaceModeRef = useRef(workspaceMode);
+  const autosaveDelayRef = useRef(getAutosaveDelayMs());
 
   metadataRef.current = metadata;
   deckHandleRef.current = deckHandle;
   folderNameRef.current = deckId ?? null;
+  workspaceModeRef.current = workspaceMode;
+
+  useEffect(() => {
+    return subscribeEditorSettings(() => {
+      autosaveDelayRef.current = getAutosaveDelayMs();
+    });
+  }, []);
+
+  const resolveAutosaveDelayMs = useCallback(() => {
+    // Custom interval applies to local modes only; git keeps a short debounce.
+    if (workspaceModeRef.current === "git") return 800;
+    return autosaveDelayRef.current;
+  }, []);
 
   const presentationFilename = isLibraryDeck
     ? metadata?.title ?? getDefaultPresentationFilename(language)
     : ephemeralTitle;
+
+  /** Markdown file whose theme the Style selector edits / preview uses. */
+  const styleTargetPath = useMemo(() => {
+    if (isMarkdownPath(activeFilePath)) return activeFilePath;
+    return entryFile;
+  }, [activeFilePath, entryFile]);
+
+  const applyStyleFromMetadata = useCallback(
+    (meta: DeckMetadata, filePath: string) => {
+      const style = resolveFileStyle(meta, filePath);
+      setSlideTheme(style.theme);
+      setSlideColorMode(style.colorMode);
+    },
+    [],
+  );
+
+  const withCurrentFileStyle = useCallback(
+    (meta: DeckMetadata, filePath = styleTargetPath): DeckMetadata =>
+      withFileStyle(meta, filePath, slideTheme, slideColorMode),
+    [styleTargetPath, slideTheme, slideColorMode],
+  );
+
+  const repositoryName = (() => {
+    if (workspaceMode === "browser") return "";
+    if (workspaceMode === "git" && deckId) {
+      const link = getDeckGithubLink(deckId);
+      if (link) return formatDeckGithubLinkLabel(link);
+      return "";
+    }
+    if (workspaceMode === "disk") {
+      if (!libraryDisplayPath || libraryDisplayPath === DEFAULT_LIBRARY_DISPLAY_PATH) {
+        return "";
+      }
+      return libraryDisplayPath;
+    }
+    return "";
+  })();
+
+  const handleWorkspaceModeChange = useCallback(async (mode: WorkspaceMode) => {
+    setWorkspaceMode(mode);
+    writeWorkspaceMode(mode);
+    try {
+      if (mode === "browser") {
+        await ensureBrowserLibraryRoot();
+        setLibraryDisplayPath(DEFAULT_LIBRARY_DISPLAY_PATH);
+      } else if (mode === "disk") {
+        if (getLibraryPreference() === "custom") {
+          const root = await getLibraryRoot();
+          setLibraryDisplayPath(getLibraryDisplayPath(root));
+        } else if (isDiskFolderPickerSupported()) {
+          const handle = await pickCustomLibraryRoot();
+          if (handle) {
+            await connectLibraryRoot(handle, "custom");
+            setLibraryDisplayPath(getLibraryDisplayPath(handle));
+          } else {
+            // Stay in disk mode with no folder — do not fall back to OPFS list
+            setLibraryDisplayPath("");
+          }
+        } else {
+          setLibraryDisplayPath("");
+        }
+      } else {
+        const root = await getLibraryRoot();
+        setLibraryDisplayPath(getLibraryDisplayPath(root));
+      }
+    } catch {
+      // keep selected mode even if root switch fails; Files panel will surface errors
+    }
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      if (workspaceMode === "disk" && getLibraryPreference() !== "custom") {
+        setLibraryDisplayPath("");
+        return;
+      }
+      const root = await getLibraryRoot();
+      setLibraryDisplayPath(getLibraryDisplayPath(root));
+    })();
+  }, [deckId, workspaceMode]);
 
   useEffect(() => {
     if (deckId) return;
@@ -135,8 +323,12 @@ export function Editor() {
         setDeckHandle(deck.handle);
         setMetadata(deck.metadata);
         setMarkdown(deck.markdown);
-        setSlideTheme(deck.metadata.slideTheme);
-        setSlideColorMode(deck.metadata.slideColorMode);
+        applyStyleFromMetadata(
+          deck.metadata,
+          deck.metadata.entryFile || DECK_MARKDOWN_FILE,
+        );
+        setActiveFilePath(deck.metadata.entryFile || DECK_MARKDOWN_FILE);
+        setAuxFileText("");
         setSaveStatus("saved");
         skipNextAutosaveRef.current = true;
       } catch {
@@ -154,7 +346,62 @@ export function Editor() {
       cancelled = true;
       if (deckId) revokeAllDeckImageUrls(deckId);
     };
-  }, [deckId, isLibraryDeck, navigate, t.loadFailed]);
+  }, [deckId, isLibraryDeck, navigate, t.loadFailed, applyStyleFromMetadata]);
+
+  const refreshWorkingTree = useCallback(async () => {
+    if (!deckHandle || !deckId || !getDeckGithubLink(deckId)) {
+      setFileTree([]);
+      setScmByPath({});
+      return;
+    }
+    try {
+      const tree = await listRepoFileTree(deckHandle);
+      setFileTree(tree);
+      const { getStagedPaths } = await import("@/lib/github/staging");
+      const { changes, scmByPath: nextScm } = await computeScmChanges({
+        deckId,
+        deckHandle,
+        staged: getStagedPaths(deckId),
+      });
+      void changes;
+      setScmByPath(nextScm);
+    } catch {
+      // ignore transient FS/API errors
+    }
+  }, [deckHandle, deckId]);
+
+  const refreshLineDiff = useCallback(async () => {
+    if (!deckId || !deckHandle || !getDeckGithubLink(deckId)) {
+      setScmLineChanges([]);
+      return;
+    }
+    if (!isTextPath(activeFilePath)) {
+      setScmLineChanges([]);
+      return;
+    }
+    try {
+      const link = getDeckGithubLink(deckId);
+      if (!link) return;
+      const remote = await getRemoteText(link, activeFilePath);
+      const local = editingMarkdown ? markdownRef.current : auxFileText;
+      setScmLineChanges(computeLineChanges(remote, local));
+    } catch {
+      setScmLineChanges([]);
+    }
+  }, [deckId, deckHandle, activeFilePath, editingMarkdown, auxFileText]);
+
+  useEffect(() => {
+    void refreshWorkingTree();
+  }, [refreshWorkingTree, scmEpoch, markdown, deckHandle]);
+
+  useEffect(() => {
+    void refreshLineDiff();
+  }, [refreshLineDiff, markdown, auxFileText, scmEpoch]);
+
+  const activeFilePathRef = useRef(activeFilePath);
+  activeFilePathRef.current = activeFilePath;
+  const auxFileTextRef = useRef(auxFileText);
+  auxFileTextRef.current = auxFileText;
 
   const flushSave = useCallback(async () => {
     const handle = deckHandleRef.current;
@@ -167,19 +414,199 @@ export function Editor() {
       saveTimerRef.current = null;
     }
 
+    const path = activeFilePathRef.current;
     setSaveStatus("saving");
     try {
-      const updated = await saveDeck(handle, folderName, markdownRef.current, {
-        ...meta,
-        slideTheme,
-        slideColorMode,
-      });
-      setMetadata(updated);
-      setSaveStatus("saved");
+      if (isMarkdownPath(path)) {
+        const updated = await saveDeck(handle, folderName, markdownRef.current, {
+          ...withCurrentFileStyle(meta, path),
+          entryFile: path,
+        });
+        setMetadata(updated);
+        setSaveStatus("saved");
+        setScmEpoch((n) => n + 1);
+        return;
+      }
+      if (isTextPath(path)) {
+        if (path === DECK_META_FILE && !jsonUnlocked) {
+          // Keep read-only JSON in sync with live style settings
+          const styled = withCurrentFileStyle(meta);
+          const updated = await saveDeck(
+            handle,
+            folderName,
+            markdownRef.current,
+            styled,
+          );
+          setMetadata(updated);
+          setAuxFileText(`${JSON.stringify(updated, null, 2)}\n`);
+          setSaveStatus("saved");
+          setScmEpoch((n) => n + 1);
+          return;
+        }
+        await writeRepoTextFile(handle, path, auxFileTextRef.current);
+        if (path === DECK_META_FILE) {
+          try {
+            const parsed = JSON.parse(auxFileTextRef.current) as unknown;
+            const { parseDeckMetadata } = await import("@/lib/library/deckFormat");
+            const nextMeta = parseDeckMetadata(parsed);
+            if (nextMeta) {
+              setMetadata(nextMeta);
+              applyStyleFromMetadata(
+                nextMeta,
+                nextMeta.entryFile || DECK_MARKDOWN_FILE,
+              );
+              if (isMarkdownPath(nextMeta.entryFile)) {
+                const entryText =
+                  (await readRepoTextFile(handle, nextMeta.entryFile)) ?? "";
+                setMarkdown(entryText);
+              }
+            }
+          } catch {
+            // Invalid JSON — keep previous metadata until fixed
+          }
+        } else {
+          // Persist file style even while editing another non-markdown file
+          const styled = withCurrentFileStyle(meta);
+          await saveDeck(handle, folderName, markdownRef.current, styled);
+          setMetadata(styled);
+        }
+        setSaveStatus("saved");
+        setScmEpoch((n) => n + 1);
+      }
     } catch {
       setSaveStatus("error");
     }
-  }, [slideTheme, slideColorMode]);
+  }, [withCurrentFileStyle, applyStyleFromMetadata, jsonUnlocked]);
+
+  const openRepoFile = useCallback(
+    async (path: string) => {
+      if (!deckHandle) return;
+      await flushSave();
+      setActiveFilePath(path);
+      setJsonUnlocked(false);
+      setJsonUnlockOpen(false);
+      if (!isTextPath(path)) {
+        setAuxFileText("");
+        window.alert("Binary files open in the file tree only.");
+        return;
+      }
+      const text = (await readRepoTextFile(deckHandle, path)) ?? "";
+      if (isMarkdownPath(path)) {
+        setMarkdown(text);
+        setAuxFileText("");
+        const meta = metadataRef.current;
+        if (meta) {
+          applyStyleFromMetadata(meta, path);
+          if (meta.entryFile !== path) {
+            const style = resolveFileStyle(meta, path);
+            const styled = withFileStyle(
+              { ...meta, entryFile: path },
+              path,
+              style.theme,
+              style.colorMode,
+            );
+            setMetadata(styled);
+            metadataRef.current = styled;
+            skipNextAutosaveRef.current = true;
+            try {
+              const folderName = folderNameRef.current;
+              if (folderName) {
+                await saveDeck(deckHandle, folderName, text, styled);
+                setSaveStatus("saved");
+                setScmEpoch((n) => n + 1);
+              }
+            } catch {
+              setSaveStatus("error");
+            }
+          }
+        }
+        return;
+      }
+      setAuxFileText(text);
+    },
+    [deckHandle, flushSave, applyStyleFromMetadata],
+  );
+
+  const handleNewFile = useCallback(
+    async (parentPath = "") => {
+      if (!deckHandle) return;
+      const name = window.prompt("New file name", "notes.md");
+      if (!name?.trim()) return;
+      const path = parentPath ? `${parentPath}/${name.trim()}` : name.trim();
+      await createRepoFile(deckHandle, path, "");
+      setScmEpoch((n) => n + 1);
+      await openRepoFile(path);
+    },
+    [deckHandle, openRepoFile],
+  );
+
+  const handleNewFolder = useCallback(
+    async (parentPath = "") => {
+      if (!deckHandle) return;
+      const name = window.prompt("New folder name", "assets");
+      if (!name?.trim()) return;
+      const path = parentPath ? `${parentPath}/${name.trim()}` : name.trim();
+      await createRepoFolder(deckHandle, path);
+      setScmEpoch((n) => n + 1);
+    },
+    [deckHandle],
+  );
+
+  const handleRenameFile = useCallback(
+    async (path: string) => {
+      if (!deckHandle) return;
+      const next = window.prompt("Rename to", path);
+      if (!next?.trim() || next.trim() === path) return;
+      await renameRepoPath(deckHandle, path, next.trim());
+      if (activeFilePath === path) setActiveFilePath(next.trim());
+      const meta = metadataRef.current;
+      if (meta) {
+        const nextPath = next.trim();
+        const fileStyles = { ...(meta.fileStyles ?? {}) };
+        if (isMarkdownPath(path) && fileStyles[path]) {
+          fileStyles[nextPath] = fileStyles[path]!;
+          delete fileStyles[path];
+        }
+        const nextMeta: DeckMetadata = {
+          ...meta,
+          fileStyles,
+          entryFile: meta.entryFile === path ? nextPath : meta.entryFile,
+        };
+        setMetadata(nextMeta);
+        metadataRef.current = nextMeta;
+      }
+      setScmEpoch((n) => n + 1);
+    },
+    [deckHandle, activeFilePath],
+  );
+
+  const handleIncludeFile = useCallback(
+    async (path: string) => {
+      if (!deckId) return;
+      stagePath(deckId, path);
+      setScmEpoch((n) => n + 1);
+    },
+    [deckId],
+  );
+
+  const handleRevertFile = useCallback(
+    async (path: string) => {
+      if (!deckId || !deckHandle) return;
+      if (!window.confirm(`Revert “${path}”?`)) return;
+      await revertFileFromRemote({ deckId, deckHandle, path });
+      unstagePath(deckId, path);
+      if (isMarkdownPath(path) && (path === entryFile || path === activeFilePath)) {
+        const text = (await readRepoTextFile(deckHandle, path)) ?? "";
+        skipNextAutosaveRef.current = true;
+        setMarkdown(text);
+        if (path === activeFilePath) setAuxFileText("");
+      } else if (path === activeFilePath) {
+        await openRepoFile(path);
+      }
+      setScmEpoch((n) => n + 1);
+    },
+    [deckId, deckHandle, activeFilePath, entryFile, openRepoFile],
+  );
 
   useEffect(() => {
     if (!isLibraryDeck) return;
@@ -199,10 +626,20 @@ export function Editor() {
       nextTheme: SlideThemeId,
       nextColorMode: SlideColorMode,
       nextMeta: DeckMetadata,
+      styleFilePath?: string,
     ) => {
       const handle = deckHandleRef.current;
       const folderName = folderNameRef.current;
       if (!handle || !folderName) return;
+
+      const delay = resolveAutosaveDelayMs();
+      if (delay === 0) {
+        if (saveTimerRef.current !== null) {
+          window.clearTimeout(saveTimerRef.current);
+          saveTimerRef.current = null;
+        }
+        return;
+      }
 
       setSaveStatus("saving");
       if (saveTimerRef.current !== null) {
@@ -211,20 +648,26 @@ export function Editor() {
       saveTimerRef.current = window.setTimeout(() => {
         void (async () => {
           try {
-            const updated = await saveDeck(handle, folderName, nextMarkdown, {
-              ...nextMeta,
-              slideTheme: nextTheme,
-              slideColorMode: nextColorMode,
-            });
+            const path =
+              styleFilePath ||
+              nextMeta.entryFile ||
+              DECK_MARKDOWN_FILE;
+            const updated = await saveDeck(
+              handle,
+              folderName,
+              nextMarkdown,
+              withFileStyle(nextMeta, path, nextTheme, nextColorMode),
+            );
             setMetadata(updated);
             setSaveStatus("saved");
+            setScmEpoch((n) => n + 1);
           } catch {
             setSaveStatus("error");
           }
         })();
-      }, 800);
+      }, delay);
     },
-    [],
+    [resolveAutosaveDelayMs],
   );
 
   useEffect(() => {
@@ -243,50 +686,133 @@ export function Editor() {
     }
     const meta = metadataRef.current;
     if (!meta) return;
-    scheduleSave(markdown, slideTheme, slideColorMode, meta);
+
+    if (!isMarkdownPath(activeFilePath) && isTextPath(activeFilePath)) {
+      if (activeFilePath === DECK_META_FILE && jsonReadOnly) {
+        const styled = withCurrentFileStyle(meta);
+        setAuxFileText(`${JSON.stringify(styled, null, 2)}\n`);
+        scheduleSave(
+          markdown,
+          slideTheme,
+          slideColorMode,
+          {
+            ...styled,
+            entryFile: meta.entryFile || DECK_MARKDOWN_FILE,
+          },
+          styleTargetPath,
+        );
+        return;
+      }
+      if (jsonReadOnly) return;
+      const delay = resolveAutosaveDelayMs();
+      if (delay === 0) return;
+      setSaveStatus("saving");
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+      saveTimerRef.current = window.setTimeout(() => {
+        void (async () => {
+          try {
+            await writeRepoTextFile(deckHandle, activeFilePath, auxFileText);
+            if (activeFilePath !== DECK_META_FILE) {
+              const styled = withCurrentFileStyle(meta);
+              await saveDeck(deckHandle, deckId, markdownRef.current, styled);
+              setMetadata(styled);
+            } else {
+              try {
+                const parsed = JSON.parse(auxFileText) as unknown;
+                const { parseDeckMetadata } = await import(
+                  "@/lib/library/deckFormat"
+                );
+                const nextMeta = parseDeckMetadata(parsed);
+                if (nextMeta) {
+                  setMetadata(nextMeta);
+                  applyStyleFromMetadata(
+                    nextMeta,
+                    nextMeta.entryFile || DECK_MARKDOWN_FILE,
+                  );
+                }
+              } catch {
+                // keep previous metadata
+              }
+            }
+            setSaveStatus("saved");
+            setScmEpoch((n) => n + 1);
+          } catch {
+            setSaveStatus("error");
+          }
+        })();
+      }, delay);
+      return;
+    }
+
+    if (!isMarkdownPath(activeFilePath)) return;
+
+    scheduleSave(
+      markdown,
+      slideTheme,
+      slideColorMode,
+      {
+        ...meta,
+        entryFile: activeFilePath,
+      },
+      activeFilePath,
+    );
   }, [
     markdown,
+    auxFileText,
+    activeFilePath,
     slideTheme,
     slideColorMode,
+    styleTargetPath,
     isLibraryDeck,
     deckHandle,
     deckId,
     loading,
     scheduleSave,
+    jsonReadOnly,
+    withCurrentFileStyle,
+    applyStyleFromMetadata,
+    resolveAutosaveDelayMs,
+    workspaceMode,
   ]);
 
-  const handleMarkdownChange = useCallback((value: string) => {
-    setMarkdown(value);
-  }, []);
-
-  const handleThemeChange = useCallback((theme: SlideThemeId) => {
-    setSlideTheme(theme);
-  }, []);
-
-  const handleColorModeChange = useCallback((mode: SlideColorMode) => {
-    setSlideColorMode(mode);
-  }, []);
-
-  const handleTitleChange = useCallback(
-    (title: string) => {
-      if (isLibraryDeck && metadata && deckHandle && deckId) {
-        const nextMeta = { ...metadata, title };
-        setMetadata(nextMeta);
-        scheduleSave(markdown, slideTheme, slideColorMode, nextMeta);
-        return;
+  const handleMarkdownChange = useCallback(
+    (value: string) => {
+      if (isJsonFile && !jsonUnlocked) return;
+      if (isMarkdownPath(activeFilePath)) {
+        setMarkdown(value);
+      } else {
+        setAuxFileText(value);
       }
-      setEphemeralTitle(title);
     },
-    [
-      deckHandle,
-      deckId,
-      isLibraryDeck,
-      markdown,
-      metadata,
-      scheduleSave,
-      slideTheme,
-      slideColorMode,
-    ],
+    [activeFilePath, isJsonFile, jsonUnlocked],
+  );
+
+  const handleThemeChange = useCallback(
+    (theme: SlideThemeId) => {
+      setSlideTheme(theme);
+      const meta = metadataRef.current;
+      if (meta) {
+        const next = withFileStyle(meta, styleTargetPath, theme, slideColorMode);
+        setMetadata(next);
+        metadataRef.current = next;
+      }
+    },
+    [styleTargetPath, slideColorMode],
+  );
+
+  const handleColorModeChange = useCallback(
+    (mode: SlideColorMode) => {
+      setSlideColorMode(mode);
+      const meta = metadataRef.current;
+      if (meta) {
+        const next = withFileStyle(meta, styleTargetPath, slideTheme, mode);
+        setMetadata(next);
+        metadataRef.current = next;
+      }
+    },
+    [styleTargetPath, slideTheme],
   );
 
   const handleLoadSample = useCallback(() => {
@@ -300,10 +826,15 @@ export function Editor() {
       }
       skipNextAutosaveRef.current = true;
       setMarkdown(pulled.markdown);
-      setSlideTheme(pulled.metadata.slideTheme);
-      setSlideColorMode(pulled.metadata.slideColorMode);
+      applyStyleFromMetadata(
+        pulled.metadata,
+        pulled.metadata.entryFile || DECK_MARKDOWN_FILE,
+      );
       setMetadata(pulled.metadata);
+      setActiveFilePath(pulled.metadata.entryFile || DECK_MARKDOWN_FILE);
+      setAuxFileText("");
       setSaveStatus("saved");
+      setScmEpoch((n) => n + 1);
       const handle = deckHandleRef.current;
       const folderName = folderNameRef.current;
       if (handle && folderName) {
@@ -320,7 +851,7 @@ export function Editor() {
         }
       }
     },
-    [deckId],
+    [deckId, applyStyleFromMetadata],
   );
 
   const handleLocateSlide = (slideIndex: number) => {
@@ -375,11 +906,9 @@ export function Editor() {
         <Header
           onLoadSample={handleLoadSample}
           hasEditorContent={markdown.trim().length > 0}
-          document={{
-            title: presentationFilename,
-            onTitleChange: handleTitleChange,
-          }}
           workspace={{
+            mode: workspaceMode,
+            repositoryName,
             openPanel: workspacePanel,
             onOpenFiles: () =>
               setWorkspacePanel((current) =>
@@ -391,13 +920,37 @@ export function Editor() {
               setWorkspacePanel((current) =>
                 current === "github" ? null : "github",
               ),
+            onUndo: () => editorRef.current?.undo(),
+            onRedo: () => editorRef.current?.redo(),
           }}
         />
         <FilesPanel
           open={workspacePanel === "files"}
           onClose={() => setWorkspacePanel(null)}
+          mode={workspaceMode}
+          onModeChange={(mode) => void handleWorkspaceModeChange(mode)}
           currentDeckId={deckId ?? null}
           onOpenGithub={() => setWorkspacePanel("github")}
+          isLinked={isLinked}
+          fileTree={fileTree}
+          selectedFilePath={activeFilePath}
+          scmByPath={scmByPath}
+          onSelectFile={(path) => void openRepoFile(path)}
+          onNewFile={(parent) => void handleNewFile(parent)}
+          onNewFolder={(parent) => void handleNewFolder(parent)}
+          onRenameFile={(path) => void handleRenameFile(path)}
+          onIncludeFile={(path) => void handleIncludeFile(path)}
+          onRevertFile={(path) => void handleRevertFile(path)}
+          onDeckDeleted={(deletedId) => {
+            if (deletedId === deckId) {
+              setScmEpoch((n) => n + 1);
+            }
+          }}
+          onDeckRenamed={(renamedId, title) => {
+            if (renamedId === deckId && metadata) {
+              setMetadata({ ...metadata, title });
+            }
+          }}
         />
         <GitPanel
           open={workspacePanel === "vcs" || workspacePanel === "github"}
@@ -410,23 +963,61 @@ export function Editor() {
           onPulled={(pulled) => void handlePulled(pulled)}
           onDeckLinked={(linkedDeckId) => {
             setWorkspacePanel(null);
+            setScmEpoch((n) => n + 1);
             if (linkedDeckId !== deckId) {
               navigate(`/edit/${linkedDeckId}`);
             }
           }}
+          onOpenFile={(path) => {
+            setWorkspacePanel(null);
+            void openRepoFile(path);
+          }}
+          onScmChanged={() => {
+            setScmEpoch((n) => n + 1);
+            void refreshWorkingTree();
+            void refreshLineDiff();
+          }}
+          scmEpoch={scmEpoch}
         />
         <main className="home-split-layout grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-2 overflow-hidden p-2 pt-2 sm:grid-cols-2 sm:grid-rows-[minmax(0,1fr)]">
           <section className="home-split-editor glass-panel flex min-h-0 min-w-0 flex-col overflow-hidden">
-            <div className="panel-chrome relative z-[1] shrink-0 border-b px-4 py-2 text-xs font-semibold tracking-wide">
-              {t.source}
+            <div className="panel-chrome relative z-[1] flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2 text-xs font-semibold tracking-wide">
+              <span className="min-w-0 truncate font-mono text-[11px]">
+                {fileBasename(activeFilePath)}
+              </span>
+              <div className="flex min-w-0 items-center gap-2">
+                {isJsonFile ? (
+                  jsonReadOnly ? (
+                    <>
+                      <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
+                        {t.readOnly}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setJsonUnlockOpen(true)}
+                        className="glass-toolbar-action shrink-0 rounded-md border border-white/15 px-2 py-0.5 text-[10px] font-semibold"
+                      >
+                        {t.unlock}
+                      </button>
+                    </>
+                  ) : (
+                    <span className="shrink-0 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                      {t.editable}
+                    </span>
+                  )
+                ) : null}
+              </div>
             </div>
             <div className="relative z-[1] flex min-h-0 flex-1 flex-col overflow-hidden">
               <MarkdownEditor
                 ref={editorRef}
-                value={markdown}
+                value={editingMarkdown ? markdown : auxFileText}
                 onChange={handleMarkdownChange}
                 onLocateSlide={handleLocateSlide}
                 placeholder={t.placeholder}
+                showLineNumbers={isLinked}
+                scmLineChanges={isLinked ? scmLineChanges : []}
+                readOnly={jsonReadOnly}
               />
             </div>
           </section>
@@ -440,6 +1031,7 @@ export function Editor() {
                 <StyleSelector
                   value={slideTheme}
                   colorMode={slideColorMode}
+                  fileLabel={styleTargetPath}
                   onChange={handleThemeChange}
                   onColorModeChange={handleColorModeChange}
                 />
@@ -478,6 +1070,57 @@ export function Editor() {
             onExit={() => setPresenting(false)}
           />
         )}
+
+        {jsonUnlockOpen ? (
+          <DialogPortal>
+            <div
+              className="fixed inset-0 z-[300] flex items-center justify-center bg-black/35 p-4 backdrop-blur-[3px]"
+              onClick={() => setJsonUnlockOpen(false)}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="json-unlock-title"
+                className="glass-panel glass-panel-dialog w-full max-w-md rounded-xl border p-5 shadow-lg"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <h2
+                  id="json-unlock-title"
+                  className="text-base font-semibold"
+                >
+                  {t.unlockTitle}
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {t.unlockBody}
+                </p>
+                {activeFilePath === DECK_META_FILE ? (
+                  <p className="mt-2 font-mono text-[11px] text-muted-foreground">
+                    {DECK_META_FILE} · fileStyles / style
+                  </p>
+                ) : null}
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    className="glass-toolbar-action rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold"
+                    onClick={() => setJsonUnlockOpen(false)}
+                  >
+                    {t.unlockCancel}
+                  </button>
+                  <button
+                    type="button"
+                    className="glass-primary rounded-lg px-3 py-1.5 text-xs font-semibold"
+                    onClick={() => {
+                      setJsonUnlocked(true);
+                      setJsonUnlockOpen(false);
+                    }}
+                  >
+                    {t.unlockConfirm}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </DialogPortal>
+        ) : null}
       </div>
     </DeckProvider>
   );

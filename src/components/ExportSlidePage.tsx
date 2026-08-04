@@ -2,6 +2,8 @@ import { SLIDE_HEIGHT, SLIDE_WIDTH } from "@/lib/slideCanvas";
 import { parseSlide } from "@/lib/slideLayout";
 import {
   getSlideThemeAttributes,
+  slideColorModeClass,
+  type SlideColorMode,
   type SlideThemeId,
 } from "@/lib/slideThemes";
 import { SlideCanvasContent } from "@/components/SlideCanvasContent";
@@ -11,12 +13,14 @@ import { cn } from "@/lib/utils";
 type ExportSlidePageProps = {
   markdown: string;
   theme: SlideThemeId;
+  colorMode?: SlideColorMode;
   slideIndex: number;
 };
 
 export function ExportSlidePage({
   markdown,
   theme,
+  colorMode = "light",
   slideIndex,
 }: ExportSlidePageProps) {
   const themeAttributes = getSlideThemeAttributes(theme);
@@ -24,7 +28,11 @@ export function ExportSlidePage({
 
   return (
     <div
-      className={cn(themeAttributes.className, "export-slide-page text-foreground")}
+      className={cn(
+        themeAttributes.className,
+        slideColorModeClass(colorMode),
+        "export-slide-page text-foreground",
+      )}
       style={{
         width: SLIDE_WIDTH,
         height: SLIDE_HEIGHT,

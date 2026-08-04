@@ -8,6 +8,8 @@ type WorkspacePanelProps = {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  /** Larger dialog for combined file tree + git controls. */
+  size?: "default" | "tall";
 };
 
 export function WorkspacePanel({
@@ -15,6 +17,7 @@ export function WorkspacePanel({
   title,
   onClose,
   children,
+  size = "default",
 }: WorkspacePanelProps) {
   if (!open) return null;
 
@@ -28,7 +31,11 @@ export function WorkspacePanel({
           role="dialog"
           aria-modal="true"
           aria-label={title}
-          className="glass-panel glass-panel-dialog flex h-[min(480px,90vh)] w-full max-w-[420px] flex-col overflow-hidden rounded-xl border shadow-lg"
+          className={
+            size === "tall"
+              ? "glass-panel glass-panel-dialog flex h-[min(720px,92vh)] w-full max-w-[460px] flex-col overflow-hidden rounded-xl border shadow-lg"
+              : "glass-panel glass-panel-dialog flex h-[min(480px,90vh)] w-full max-w-[420px] flex-col overflow-hidden rounded-xl border shadow-lg"
+          }
           onClick={(event) => event.stopPropagation()}
         >
           <div className="glass-divider relative z-[1] flex shrink-0 items-center justify-between border-b px-5 py-3.5">
