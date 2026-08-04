@@ -187,10 +187,11 @@ export function Editor() {
       if (saveStatus === "saving") {
         event.preventDefault();
       }
+      void flushSave();
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [isLibraryDeck, saveStatus]);
+  }, [isLibraryDeck, saveStatus, flushSave]);
 
   const scheduleSave = useCallback(
     (

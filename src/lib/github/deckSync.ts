@@ -242,11 +242,9 @@ export async function pullDeckFromGithub(options: {
     );
     if (!remote?.content) continue;
     const bytes = decodeBase64ToBytes(remote.content);
-    await writeBinaryFile(
-      imagesDir,
-      file.name,
-      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
-    );
+    const buffer = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(buffer).set(bytes);
+    await writeBinaryFile(imagesDir, file.name, buffer);
   }
 
   const localImages = await listLocalImageNames(options.deckHandle);
