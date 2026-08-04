@@ -1,6 +1,9 @@
 import { SLIDE_HEIGHT, SLIDE_WIDTH } from "@/lib/slideCanvas";
 import { parseSlide } from "@/lib/slideLayout";
-import { getSlideThemeAttributes, type SlideThemeId } from "@/lib/slideThemes";
+import {
+  getSlideThemeAttributes,
+  type SlideThemeId,
+} from "@/lib/slideThemes";
 import { SlideCanvasContent } from "@/components/SlideCanvasContent";
 import { SlideView } from "@/components/SlideView";
 import { cn } from "@/lib/utils";
@@ -29,7 +32,7 @@ export function ExportSlidePage({
       }}
     >
       <div
-        className="slide-frame h-full w-full overflow-hidden bg-card"
+        className="slide-frame h-full w-full overflow-hidden"
         style={{ width: SLIDE_WIDTH, height: SLIDE_HEIGHT }}
       >
         <SlideCanvasContent

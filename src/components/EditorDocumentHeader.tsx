@@ -37,7 +37,7 @@ export function EditorDocumentHeader({
   const t = copy[language];
 
   return (
-    <div className="shrink-0 border-b border-gray-300 px-4 py-3 dark:border-gray-700">
+    <div className="shrink-0 border-b glass-divider px-4 py-3 relative z-[1]">
       <div className="flex min-w-0 items-center gap-3">
         <Link
           to="/"

@@ -18,5 +18,13 @@ export default defineConfig({
     host: true,
     port: 5173,
     open: true,
+    proxy: {
+      // Browser cannot call github.com/login/* (CORS). Proxy Device Flow endpoints in dev.
+      "/github-oauth": {
+        target: "https://github.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/github-oauth/, ""),
+      },
+    },
   },
 });

@@ -89,6 +89,17 @@ YourLibraryFolder/
 
 Safari Private Browsing disables origin storage — use a normal window or **Continue without saving**. Firefox does not yet support the default library; use **Continue without saving** there.
 
+## GitHub sync (local development)
+
+In the editor toolbar, **Files** browses your library, **GitHub** signs in via Device Flow, and **Git** pushes/pulls the current presentation to a linked GitHub repository (Contents API).
+
+1. Create a GitHub OAuth App at [GitHub Developer Settings](https://github.com/settings/developers).
+2. Enable **Device Flow** on the app.
+3. Copy `.env.example` to `.env.local` and set `VITE_GITHUB_CLIENT_ID`.
+4. Run `pnpm dev` — Device Flow calls are proxied through Vite (`/github-oauth` → `github.com`) because browsers block CORS on GitHub’s login endpoints.
+
+Production static hosts (e.g. GitHub Pages) need an equivalent reverse proxy for `/github-oauth` for sign-in to work; the GitHub REST API itself is called directly from the browser with the stored token.
+
 ## Theme setup
 
 Sticker themes (Bear Academy, The Beauties) are configured in setup files under `src/lib/themes/`:

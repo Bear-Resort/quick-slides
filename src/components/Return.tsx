@@ -48,14 +48,14 @@ function BearResortDialog({ open, onClose }: BearResortDialogProps) {
   return (
     <DialogPortal>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-[3px]"
         onClick={onClose}
       >
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby="bear-resort-dialog-title"
-          className="w-full max-w-sm rounded-xl border border-gray-300 bg-background p-6 shadow-lg dark:border-gray-700"
+          className="glass-panel glass-panel-dialog w-full max-w-sm rounded-xl border p-6 shadow-lg"
           onClick={(event) => event.stopPropagation()}
         >
           <div className="flex items-start justify-between gap-3">
@@ -106,7 +106,7 @@ export function Return() {
 
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)} className="slide-locate-btn gap-2">
+      <Button variant="outline" onClick={() => setOpen(true)} className="slide-locate-btn glass-toolbar-action gap-2">
         <img
           src="https://bear-resort.github.io/logos/default-bear.gif"
           alt=""

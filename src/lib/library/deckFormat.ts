@@ -1,4 +1,5 @@
-import type { SlideThemeId } from "@/lib/slideThemes";
+import type { SlideColorMode, SlideThemeId } from "@/lib/slideThemes";
+import { isSlideColorMode, isSlideThemeId } from "@/lib/slideThemes";
 
 export const DECK_MARKDOWN_FILE = "deck.md";
 export const DECK_META_FILE = "quick-slides.json";
@@ -9,6 +10,8 @@ export type DeckMetadata = {
   version: typeof DECK_FORMAT_VERSION;
   title: string;
   slideTheme: SlideThemeId;
+  /** Slide surface light/dark (exported with PDF/HTML). */
+  slideColorMode: SlideColorMode;
   createdAt: string;
   updatedAt: string;
 };
@@ -20,21 +23,6 @@ export type LibraryIndexEntry = {
   updatedAt: string;
   lastOpenedAt: string;
 };
-
-const SLIDE_THEME_IDS = new Set<SlideThemeId>([
-  "regular",
-  "gray",
-  "blue",
-  "red",
-  "green",
-  "purple",
-  "bear-academy",
-  "the-beauties",
-]);
-
-export function isSlideThemeId(value: string): value is SlideThemeId {
-  return SLIDE_THEME_IDS.has(value as SlideThemeId);
-}
 
 export function slugifyTitle(title: string): string {
   const base = title
@@ -58,12 +46,14 @@ export function generateDeckFolderName(title: string): string {
 export function createDeckMetadata(
   title: string,
   slideTheme: SlideThemeId = "regular",
+  slideColorMode: SlideColorMode = "light",
 ): DeckMetadata {
   const now = new Date().toISOString();
   return {
     version: DECK_FORMAT_VERSION,
     title,
     slideTheme,
+    slideColorMode,
     createdAt: now,
     updatedAt: now,
   };
@@ -77,6 +67,10 @@ export function parseDeckMetadata(raw: unknown): DeckMetadata | null {
     typeof record.slideTheme === "string" && isSlideThemeId(record.slideTheme)
       ? record.slideTheme
       : "regular";
+  const slideColorMode =
+    typeof record.slideColorMode === "string" && isSlideColorMode(record.slideColorMode)
+      ? record.slideColorMode
+      : "light";
   const createdAt =
     typeof record.createdAt === "string" ? record.createdAt : new Date().toISOString();
   const updatedAt =
@@ -88,6 +82,7 @@ export function parseDeckMetadata(raw: unknown): DeckMetadata | null {
     version: DECK_FORMAT_VERSION,
     title,
     slideTheme,
+    slideColorMode,
     createdAt,
     updatedAt,
   };

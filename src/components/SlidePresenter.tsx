@@ -3,19 +3,21 @@ import { PresenterBar } from "@/components/PresenterBar";
 import { ScaledSlideFrame } from "@/components/ScaledSlideFrame";
 import { SlideView } from "@/components/SlideView";
 import { splitSlides } from "@/lib/slides";
-import { getSlideThemeAttributes, type SlideThemeId } from "@/lib/slideThemes";
+import { getSlideThemeAttributes, slideColorModeClass, type SlideColorMode, type SlideThemeId } from "@/lib/slideThemes";
 import { parseSlide } from "@/lib/slideLayout";
 import { cn } from "@/lib/utils";
 
 type SlidePresenterProps = {
   markdown: string;
   theme: SlideThemeId;
+  colorMode?: SlideColorMode;
   onExit: () => void;
 };
 
 export function SlidePresenter({
   markdown,
   theme,
+  colorMode = "light",
   onExit,
 }: SlidePresenterProps) {
   const slides = splitSlides(markdown);
@@ -103,13 +105,16 @@ export function SlidePresenter({
   return (
     <div
       ref={containerRef}
-      className={cn(
-        "slide-presenter fixed inset-0 z-50 flex flex-col bg-background",
-        themeAttributes.className,
-      )}
-      style={themeAttributes.style}
+      className="slide-presenter ambient-bg fixed inset-0 z-50 flex flex-col"
     >
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-6 py-6 sm:px-10">
+      <div
+        className={cn(
+          "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-6 py-6 sm:px-10",
+          slideColorModeClass(colorMode),
+          themeAttributes.className,
+        )}
+        style={themeAttributes.style}
+      >
         <ScaledSlideFrame
           className="mx-auto h-full min-h-0 max-w-[min(100%,calc((100dvh-12rem)*16/9))]"
           theme={theme}

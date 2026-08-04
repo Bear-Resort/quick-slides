@@ -2,7 +2,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 const tooltipClassName =
-  "pointer-events-none absolute right-full top-1/2 z-50 mr-1.5 -translate-y-1/2 whitespace-nowrap rounded-md border border-gray-300 bg-popover px-2 py-0.5 text-[10px] font-medium text-popover-foreground opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 dark:border-gray-700";
+  "glass-panel pointer-events-none absolute right-full top-1/2 z-50 mr-1.5 -translate-y-1/2 whitespace-nowrap rounded-md border px-2 py-0.5 text-[10px] font-medium text-foreground opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100";
 
 type LocateIconButtonProps = {
   label: string;

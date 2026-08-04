@@ -67,14 +67,14 @@ function TableCustomSizeDialog({
   return (
     <DialogPortal>
       <div
-        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/25 p-4 backdrop-blur-sm"
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-4 backdrop-blur-[3px]"
         onClick={onClose}
       >
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby="table-custom-size-title"
-          className="w-full max-w-xs rounded-xl border border-gray-300 bg-background shadow-lg dark:border-gray-700"
+          className="glass-panel glass-panel-dialog w-full max-w-xs rounded-xl border shadow-lg"
           onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
@@ -83,7 +83,7 @@ function TableCustomSizeDialog({
             }
           }}
         >
-          <div className="flex items-center justify-between border-b border-gray-300 px-4 py-3 dark:border-gray-700">
+          <div className="glass-divider relative z-[1] flex items-center justify-between border-b px-4 py-3">
             <h2 id="table-custom-size-title" className="text-sm font-semibold">
               {copy.customTitle}
             </h2>
@@ -99,7 +99,7 @@ function TableCustomSizeDialog({
             </Button>
           </div>
 
-          <div className="space-y-3 px-4 py-4">
+          <div className="relative z-[1] space-y-3 px-4 py-4">
             <label className="block space-y-1.5">
               <span className="text-xs font-medium text-muted-foreground">{copy.rows}</span>
               <input
@@ -108,7 +108,7 @@ function TableCustomSizeDialog({
                 max={MAX_TABLE_DIMENSION}
                 value={rows}
                 onChange={(event) => setRows(event.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="w-full rounded-md border border-input bg-background/60 px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
             </label>
             <label className="block space-y-1.5">
@@ -119,12 +119,12 @@ function TableCustomSizeDialog({
                 max={MAX_TABLE_DIMENSION}
                 value={cols}
                 onChange={(event) => setCols(event.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="w-full rounded-md border border-input bg-background/60 px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
             </label>
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-gray-300 px-4 py-3 dark:border-gray-700">
+          <div className="glass-divider relative z-[1] flex justify-end gap-2 border-t px-4 py-3">
             <Button type="button" variant="outline" size="sm" onClick={onClose}>
               {copy.cancel}
             </Button>

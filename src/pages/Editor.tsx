@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { HtmlScrollbarArea } from "@/components/HtmlScrollbar";
+import { FilesPanel } from "@/components/FilesPanel";
+import { GitPanel, type GitPanelVariant } from "@/components/GitPanel";
 import { Header } from "@/components/Header";
 import { SlideActions } from "@/components/SlideActions";
 import {
   MarkdownEditor,
   type MarkdownEditorHandle,
 } from "@/components/MarkdownEditor";
-import { EditorDocumentHeader, type SaveStatus } from "@/components/EditorDocumentHeader";
+import type { SaveStatus } from "@/components/EditorDocumentHeader";
 import { SlideDeck, type SlideDeckHandle } from "@/components/SlideDeck";
 import { SlidePresenter } from "@/components/SlidePresenter";
 import { StyleSelector } from "@/components/StyleSelector";
@@ -25,11 +27,13 @@ import {
   loadDeck,
   saveDeck,
 } from "@/lib/library/deckStorage";
+import { bootstrapLibrary } from "@/lib/library/libraryBootstrap";
+import type { PulledDeck } from "@/lib/github/deckSync";
 import {
   getDefaultPresentationFilename,
   getPresentationFilename,
 } from "@/lib/presentationFilename";
-import type { SlideThemeId } from "@/lib/slideThemes";
+import type { SlideColorMode, SlideThemeId } from "@/lib/slideThemes";
 import { useLanguage } from "@/lib/useLanguage";
 
 const copy = {
@@ -58,6 +62,7 @@ export function Editor() {
   const markdownRef = useRef("");
   markdownRef.current = markdown;
   const [slideTheme, setSlideTheme] = useState<SlideThemeId>("regular");
+  const [slideColorMode, setSlideColorMode] = useState<SlideColorMode>("light");
   const [presenting, setPresenting] = useState(false);
   const [loading, setLoading] = useState(isLibraryDeck);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>(isLibraryDeck ? "saved" : null);
@@ -65,6 +70,9 @@ export function Editor() {
   const [deckHandle, setDeckHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [metadata, setMetadata] = useState<DeckMetadata | null>(null);
   const [ephemeralTitle, setEphemeralTitle] = useState(() => getPresentationFilename());
+  const [workspacePanel, setWorkspacePanel] = useState<
+    "files" | GitPanelVariant | null
+  >(() => (deckId ? null : "files"));
 
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const slideDeckRef = useRef<SlideDeckHandle>(null);
@@ -83,6 +91,18 @@ export function Editor() {
     : ephemeralTitle;
 
   useEffect(() => {
+    if (deckId) return;
+    setWorkspacePanel("files");
+    setDeckHandle(null);
+    setMetadata(null);
+    setMarkdown("");
+    setSlideTheme("regular");
+    setSlideColorMode("light");
+    setSaveStatus(null);
+    void bootstrapLibrary();
+  }, [deckId]);
+
+  useEffect(() => {
     if (!isLibraryDeck || !deckId) return;
 
     let cancelled = false;
@@ -92,13 +112,22 @@ export function Editor() {
       try {
         const root = await getLibraryRoot();
         if (!root) {
-          navigate("/", { replace: true });
+          await bootstrapLibrary();
+        }
+        const libraryRoot = (await getLibraryRoot()) ?? root;
+        if (!libraryRoot) {
+          if (!cancelled) {
+            window.alert(t.loadFailed);
+            setWorkspacePanel("files");
+            navigate("/", { replace: true });
+          }
           return;
         }
-        const deck = await loadDeck(root, deckId);
+        const deck = await loadDeck(libraryRoot, deckId);
         if (!deck || cancelled) {
           if (!cancelled) {
             window.alert(t.loadFailed);
+            setWorkspacePanel("files");
             navigate("/", { replace: true });
           }
           return;
@@ -107,11 +136,13 @@ export function Editor() {
         setMetadata(deck.metadata);
         setMarkdown(deck.markdown);
         setSlideTheme(deck.metadata.slideTheme);
+        setSlideColorMode(deck.metadata.slideColorMode);
         setSaveStatus("saved");
         skipNextAutosaveRef.current = true;
       } catch {
         if (!cancelled) {
           window.alert(t.loadFailed);
+          setWorkspacePanel("files");
           navigate("/", { replace: true });
         }
       } finally {
@@ -141,13 +172,14 @@ export function Editor() {
       const updated = await saveDeck(handle, folderName, markdownRef.current, {
         ...meta,
         slideTheme,
+        slideColorMode,
       });
       setMetadata(updated);
       setSaveStatus("saved");
     } catch {
       setSaveStatus("error");
     }
-  }, [slideTheme]);
+  }, [slideTheme, slideColorMode]);
 
   useEffect(() => {
     if (!isLibraryDeck) return;
@@ -161,7 +193,12 @@ export function Editor() {
   }, [isLibraryDeck, saveStatus]);
 
   const scheduleSave = useCallback(
-    (nextMarkdown: string, nextTheme: SlideThemeId, nextMeta: DeckMetadata) => {
+    (
+      nextMarkdown: string,
+      nextTheme: SlideThemeId,
+      nextColorMode: SlideColorMode,
+      nextMeta: DeckMetadata,
+    ) => {
       const handle = deckHandleRef.current;
       const folderName = folderNameRef.current;
       if (!handle || !folderName) return;
@@ -176,6 +213,7 @@ export function Editor() {
             const updated = await saveDeck(handle, folderName, nextMarkdown, {
               ...nextMeta,
               slideTheme: nextTheme,
+              slideColorMode: nextColorMode,
             });
             setMetadata(updated);
             setSaveStatus("saved");
@@ -204,8 +242,17 @@ export function Editor() {
     }
     const meta = metadataRef.current;
     if (!meta) return;
-    scheduleSave(markdown, slideTheme, meta);
-  }, [markdown, slideTheme, isLibraryDeck, deckHandle, deckId, loading, scheduleSave]);
+    scheduleSave(markdown, slideTheme, slideColorMode, meta);
+  }, [
+    markdown,
+    slideTheme,
+    slideColorMode,
+    isLibraryDeck,
+    deckHandle,
+    deckId,
+    loading,
+    scheduleSave,
+  ]);
 
   const handleMarkdownChange = useCallback((value: string) => {
     setMarkdown(value);
@@ -215,22 +262,65 @@ export function Editor() {
     setSlideTheme(theme);
   }, []);
 
+  const handleColorModeChange = useCallback((mode: SlideColorMode) => {
+    setSlideColorMode(mode);
+  }, []);
+
   const handleTitleChange = useCallback(
     (title: string) => {
       if (isLibraryDeck && metadata && deckHandle && deckId) {
         const nextMeta = { ...metadata, title };
         setMetadata(nextMeta);
-        scheduleSave(markdown, slideTheme, nextMeta);
+        scheduleSave(markdown, slideTheme, slideColorMode, nextMeta);
         return;
       }
       setEphemeralTitle(title);
     },
-    [deckHandle, deckId, isLibraryDeck, markdown, metadata, scheduleSave, slideTheme],
+    [
+      deckHandle,
+      deckId,
+      isLibraryDeck,
+      markdown,
+      metadata,
+      scheduleSave,
+      slideTheme,
+      slideColorMode,
+    ],
   );
 
   const handleLoadSample = useCallback(() => {
     setMarkdown(SAMPLE_MARKDOWN);
   }, []);
+
+  const handlePulled = useCallback(
+    async (pulled: PulledDeck) => {
+      if (deckId) {
+        revokeAllDeckImageUrls(deckId);
+      }
+      skipNextAutosaveRef.current = true;
+      setMarkdown(pulled.markdown);
+      setSlideTheme(pulled.metadata.slideTheme);
+      setSlideColorMode(pulled.metadata.slideColorMode);
+      setMetadata(pulled.metadata);
+      setSaveStatus("saved");
+      const handle = deckHandleRef.current;
+      const folderName = folderNameRef.current;
+      if (handle && folderName) {
+        try {
+          const updated = await saveDeck(
+            handle,
+            folderName,
+            pulled.markdown,
+            pulled.metadata,
+          );
+          setMetadata(updated);
+        } catch {
+          // Local write already done in pull; index update is best-effort.
+        }
+      }
+    },
+    [deckId],
+  );
 
   const handleLocateSlide = (slideIndex: number) => {
     slideDeckRef.current?.locateSlide(slideIndex);
@@ -284,44 +374,81 @@ export function Editor() {
         <Header
           onLoadSample={handleLoadSample}
           hasEditorContent={markdown.trim().length > 0}
+          document={{
+            title: presentationFilename,
+            onTitleChange: handleTitleChange,
+          }}
+          workspace={{
+            openPanel: workspacePanel,
+            onOpenFiles: () =>
+              setWorkspacePanel((current) =>
+                current === "files" ? null : "files",
+              ),
+            onOpenGit: () =>
+              setWorkspacePanel((current) => (current === "vcs" ? null : "vcs")),
+            onOpenGithub: () =>
+              setWorkspacePanel((current) =>
+                current === "github" ? null : "github",
+              ),
+          }}
         />
-        <main className="home-split-layout grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] overflow-hidden sm:grid-cols-2 sm:grid-rows-[minmax(0,1fr)]">
-          <section className="home-split-editor flex min-h-0 min-w-0 flex-col overflow-hidden border-b border-gray-300 sm:border-r sm:border-b-0 dark:border-gray-700">
-            <EditorDocumentHeader
-              title={presentationFilename}
-              onTitleChange={handleTitleChange}
-              saveStatus={saveStatus}
-              onBack={() => void flushSave()}
-            />
-            <div className="shrink-0 border-b border-gray-300 px-4 py-2 text-xs font-semibold tracking-wide text-muted-foreground dark:border-gray-700">
+        <FilesPanel
+          open={workspacePanel === "files"}
+          onClose={() => setWorkspacePanel(null)}
+          currentDeckId={deckId ?? null}
+          onOpenGithub={() => setWorkspacePanel("github")}
+        />
+        <GitPanel
+          open={workspacePanel === "vcs" || workspacePanel === "github"}
+          onClose={() => setWorkspacePanel(null)}
+          variant={workspacePanel === "github" ? "github" : "vcs"}
+          deckId={deckId ?? null}
+          deckHandle={deckHandle}
+          deckTitle={presentationFilename}
+          onOpenGithub={() => setWorkspacePanel("github")}
+          onPulled={(pulled) => void handlePulled(pulled)}
+        />
+        <main className="home-split-layout grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-2 overflow-hidden p-2 pt-2 sm:grid-cols-2 sm:grid-rows-[minmax(0,1fr)]">
+          <section className="home-split-editor glass-panel flex min-h-0 min-w-0 flex-col overflow-hidden">
+            <div className="panel-chrome relative z-[1] shrink-0 border-b px-4 py-2 text-xs font-semibold tracking-wide">
               {t.source}
             </div>
-            <MarkdownEditor
-              ref={editorRef}
-              value={markdown}
-              onChange={handleMarkdownChange}
-              onLocateSlide={handleLocateSlide}
-              placeholder={t.placeholder}
-            />
-          </section>
-
-          <section className="home-split-slides flex min-h-0 min-w-0 flex-col overflow-hidden">
-            <StyleSelector value={slideTheme} onChange={handleThemeChange} />
-            <div className="flex shrink-0 items-center justify-between border-b border-gray-300 px-4 py-2 dark:border-gray-700">
-              <span className="text-xs font-semibold tracking-wide text-muted-foreground">
-                {t.slides}
-              </span>
-              <SlideActions
-                markdown={markdown}
-                theme={slideTheme}
-                filename={presentationFilename}
-                deckHandle={deckHandle}
-                deckId={deckId ?? null}
-                onPresent={() => setPresenting(true)}
+            <div className="relative z-[1] flex min-h-0 flex-1 flex-col overflow-hidden">
+              <MarkdownEditor
+                ref={editorRef}
+                value={markdown}
+                onChange={handleMarkdownChange}
+                onLocateSlide={handleLocateSlide}
+                placeholder={t.placeholder}
               />
             </div>
+          </section>
+
+          <section className="home-split-slides glass-panel flex min-h-0 min-w-0 flex-col">
+            <div className="panel-chrome relative z-[1] flex shrink-0 items-center justify-between border-b px-4 py-2">
+              <span className="relative z-[1] text-xs font-semibold tracking-wide">
+                {t.slides}
+              </span>
+              <div className="relative z-[1] flex items-center gap-2">
+                <StyleSelector
+                  value={slideTheme}
+                  colorMode={slideColorMode}
+                  onChange={handleThemeChange}
+                  onColorModeChange={handleColorModeChange}
+                />
+                <SlideActions
+                  markdown={markdown}
+                  theme={slideTheme}
+                  colorMode={slideColorMode}
+                  filename={presentationFilename}
+                  deckHandle={deckHandle}
+                  deckId={deckId ?? null}
+                  onPresent={() => setPresenting(true)}
+                />
+              </div>
+            </div>
             <HtmlScrollbarArea
-              className="bg-secondary/30"
+              className="relative z-[1] min-h-0 flex-1 overflow-hidden bg-secondary/20"
               contentClassName="p-4 sm:p-6"
               refreshToken={markdown}
             >
@@ -329,6 +456,7 @@ export function Editor() {
                 ref={slideDeckRef}
                 markdown={markdown}
                 theme={slideTheme}
+                colorMode={slideColorMode}
                 onLocateEditor={handleLocateEditor}
               />
             </HtmlScrollbarArea>
@@ -339,6 +467,7 @@ export function Editor() {
           <SlidePresenter
             markdown={markdown}
             theme={slideTheme}
+            colorMode={slideColorMode}
             onExit={() => setPresenting(false)}
           />
         )}

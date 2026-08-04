@@ -1,6 +1,5 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Editor } from "@/pages/Editor";
-import { Library } from "@/pages/Library";
 
 function getRouterBasename() {
   const base = import.meta.env.BASE_URL;
@@ -10,13 +9,16 @@ function getRouterBasename() {
 
 function App() {
   return (
-    <BrowserRouter basename={getRouterBasename()}>
-      <Routes>
-        <Route path="/" element={<Library />} />
-        <Route path="/edit" element={<Editor />} />
-        <Route path="/edit/:deckId" element={<Editor />} />
-      </Routes>
-    </BrowserRouter>
+    <div className="ambient-bg flex h-full min-h-0 flex-col overflow-hidden">
+      <BrowserRouter basename={getRouterBasename()}>
+        <Routes>
+          <Route path="/" element={<Editor />} />
+          <Route path="/edit" element={<Navigate to="/" replace />} />
+          <Route path="/edit/:deckId" element={<Editor />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </div>
   );
 }
 

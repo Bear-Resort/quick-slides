@@ -58,7 +58,7 @@ function StoredImageTile({
       title={entry.fileName}
       aria-label={`${label}: ${entry.fileName}`}
       className={cn(
-        "group flex flex-col overflow-hidden rounded-lg border border-gray-300 bg-background",
+        "group flex flex-col overflow-hidden rounded-lg border border-white/20 bg-background/40",
         "transition-colors hover:border-primary hover:ring-2 hover:ring-primary/30",
         "dark:border-gray-700",
       )}
@@ -155,17 +155,17 @@ export function EditorImagePickerDialog({
   return (
     <DialogPortal>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-[3px]"
         onClick={onClose}
       >
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby="editor-image-picker-title"
-          className="flex max-h-[min(32rem,85vh)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-gray-300 bg-background shadow-lg dark:border-gray-700"
+          className="glass-panel glass-panel-dialog flex max-h-[min(32rem,85vh)] w-full max-w-lg flex-col overflow-hidden rounded-xl border shadow-lg"
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-300 px-4 py-3 dark:border-gray-700">
+          <div className="glass-divider relative z-[1] flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3">
             <h2 id="editor-image-picker-title" className="text-base font-semibold">
               {t.title}
             </h2>
@@ -180,7 +180,7 @@ export function EditorImagePickerDialog({
             </Button>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+          <div className="relative z-[1] min-h-0 flex-1 overflow-y-auto px-4 py-4">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {t.stored}
             </p>
@@ -207,7 +207,7 @@ export function EditorImagePickerDialog({
             )}
           </div>
 
-          <div className="shrink-0 border-t border-gray-300 px-4 py-3 dark:border-gray-700">
+          <div className="glass-divider relative z-[1] shrink-0 border-t px-4 py-3">
             <input
               ref={fileInputRef}
               type="file"

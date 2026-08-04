@@ -24,8 +24,12 @@ import { getLanguage, type Language } from "@/lib/language";
 import { getExportBasename } from "@/lib/presentationFilename";
 import { presenterUiCopy } from "@/lib/presenterUi";
 import { splitSlides } from "@/lib/slides";
-import { getSlideThemeAttributes, type SlideThemeId } from "@/lib/slideThemes";
-import type { Theme } from "@/lib/theme";
+import {
+  getSlideThemeAttributes,
+  slideColorModeClass,
+  type SlideColorMode,
+  type SlideThemeId,
+} from "@/lib/slideThemes";
 
 const EXPORT_MOUNT_ID = "quick-slides-export-mount";
 const PDF_CAPTURE_SCALE = 1.5;
@@ -277,7 +281,10 @@ const ICON_SETTINGS =
 const ICON_X =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
 
-function buildPresenterScript(initialLanguage: Language, initialTheme: Theme): string {
+function buildPresenterScript(
+  initialLanguage: Language,
+  initialColorMode: SlideColorMode,
+): string {
   const ui = JSON.stringify(presenterUiCopy);
 
   return `
@@ -286,7 +293,8 @@ function buildPresenterScript(initialLanguage: Language, initialTheme: Theme): s
   var slides = Array.prototype.slice.call(document.querySelectorAll(".export-slide"));
   var index = 0;
   var language = ${JSON.stringify(initialLanguage)};
-  var theme = ${JSON.stringify(initialTheme)};
+  var colorMode = ${JSON.stringify(initialColorMode)};
+  var presenter = document.getElementById("presenter");
   var counter = document.getElementById("counter");
   var prevBtn = document.getElementById("prev");
   var nextBtn = document.getElementById("next");
@@ -301,10 +309,6 @@ function buildPresenterScript(initialLanguage: Language, initialTheme: Theme): s
     if (storedLanguage === "en" || storedLanguage === "zh") {
       language = storedLanguage;
     }
-    var storedTheme = localStorage.getItem("theme");
-    if (storedTheme === "day" || storedTheme === "night") {
-      theme = storedTheme;
-    }
   } catch (e) {}
 
   function labels() {
@@ -313,7 +317,7 @@ function buildPresenterScript(initialLanguage: Language, initialTheme: Theme): s
 
   function themeLabel() {
     var t = labels();
-    return theme === "night" ? t.themeNight : t.themeDay;
+    return colorMode === "dark" ? t.themeDark : t.themeLight;
   }
 
   function languageToggleLabel() {
@@ -323,10 +327,11 @@ function buildPresenterScript(initialLanguage: Language, initialTheme: Theme): s
   }
 
   function applyTheme() {
-    document.documentElement.classList.toggle("night", theme === "night");
-    try {
-      localStorage.setItem("theme", theme);
-    } catch (e) {}
+    document.documentElement.classList.toggle("night", colorMode === "dark");
+    if (presenter) {
+      presenter.classList.remove("slide-color-light", "slide-color-dark");
+      presenter.classList.add(colorMode === "dark" ? "slide-color-dark" : "slide-color-light");
+    }
   }
 
   function closeSettingsMenu() {
@@ -427,7 +432,7 @@ function buildPresenterScript(initialLanguage: Language, initialTheme: Theme): s
   }
 
   function toggleTheme() {
-    theme = theme === "night" ? "day" : "night";
+    colorMode = colorMode === "dark" ? "light" : "dark";
     applyTheme();
     updateChrome();
   }
@@ -515,7 +520,7 @@ function buildPresenterScript(initialLanguage: Language, initialTheme: Theme): s
 async function renderSlidesForExport(
   markdown: string,
   theme: SlideThemeId,
-  colorTheme: Theme,
+  colorMode: SlideColorMode,
   exportImages: ExportImageOptions,
   onSlide: (element: HTMLElement, index: number) => Promise<void>,
 ): Promise<void> {
@@ -525,7 +530,12 @@ async function renderSlidesForExport(
 
   const mount = document.createElement("div");
   mount.id = EXPORT_MOUNT_ID;
-  mount.className = colorTheme === "night" ? "night" : "";
+  mount.className = [
+    slideColorModeClass(colorMode),
+    colorMode === "dark" ? "night" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   mount.style.cssText =
     "position:fixed;left:-10000px;top:0;width:1280px;height:720px;pointer-events:none;overflow:hidden;";
   document.body.appendChild(mount);
@@ -606,7 +616,7 @@ function downloadBlob(blob: Blob, filename: string): void {
 export async function downloadSlidesPdf(
   markdown: string,
   theme: SlideThemeId,
-  colorTheme: Theme,
+  colorMode: SlideColorMode,
   filename: string,
   deckHandle: FileSystemDirectoryHandle | null = null,
   deckId: string | null = null,
@@ -626,7 +636,7 @@ export async function downloadSlidesPdf(
     await renderSlidesForExport(
       markdown,
       theme,
-      colorTheme,
+      colorMode,
       exportImages,
       async (slideEl, index) => {
         const pageRoot = await prepareSlideElementForExport(slideEl, exportImages);
@@ -696,7 +706,7 @@ function escapeHtml(text: string): string {
 
 function buildHtmlDocument(
   slideFragments: string[],
-  colorTheme: Theme,
+  colorMode: SlideColorMode,
   slideThemeId: SlideThemeId,
   language: Language,
   embeddedStyles: string,
@@ -709,13 +719,14 @@ function buildHtmlDocument(
     )
     .join("\n");
 
-  const nightClass = colorTheme === "night" ? " night" : "";
+  const nightClass = colorMode === "dark" ? " night" : "";
   const slideThemeClass = getSlideThemeAttributes(slideThemeId).className;
+  const colorModeClass = slideColorModeClass(colorMode);
   const t = presenterUiCopy[language];
-  const themeLabel = colorTheme === "night" ? t.themeNight : t.themeDay;
+  const themeLabel = colorMode === "dark" ? t.themeDark : t.themeLight;
   const languageToggleLabel =
     language === "en" ? `Language: ${t.languageEn}` : `语言: ${t.languageZh}`;
-  const presenterScript = buildPresenterScript(language, colorTheme);
+  const presenterScript = buildPresenterScript(language, colorMode);
 
   return `<!DOCTYPE html>
 <html lang="${language}" class="${nightClass.trim()}">
@@ -733,7 +744,7 @@ ${EXPORT_SAFARI_COLOR_FALLBACKS}
   </style>
 </head>
 <body>
-  <div id="presenter" class="export-presenter slide-presenter ${slideThemeClass}">
+  <div id="presenter" class="export-presenter slide-presenter ${slideThemeClass} ${colorModeClass}">
     <div id="stage" class="export-presenter-stage">
 ${slidesHtml}
     </div>
@@ -778,7 +789,7 @@ ${slidesHtml}
 export async function downloadSlidesHtml(
   markdown: string,
   theme: SlideThemeId,
-  colorTheme: Theme,
+  colorMode: SlideColorMode,
   filename: string,
   deckHandle: FileSystemDirectoryHandle | null = null,
   deckId: string | null = null,
@@ -793,7 +804,7 @@ export async function downloadSlidesHtml(
     await renderSlidesForExport(
       markdown,
       theme,
-      colorTheme,
+      colorMode,
       exportImages,
       async (slideEl) => {
         await prepareSlideElementForExport(slideEl, exportImages);
@@ -804,7 +815,7 @@ export async function downloadSlidesHtml(
     const embeddedStyles = await embedUrlsInCss(collectEmbeddedStyles(), exportImages);
     const html = buildHtmlDocument(
       slideFragments,
-      colorTheme,
+      colorMode,
       theme,
       language,
       embeddedStyles,

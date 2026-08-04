@@ -371,7 +371,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           placeholder={placeholder}
           spellCheck={false}
           className={cn(
-            "absolute inset-0 z-0 w-full resize-none overflow-y-auto bg-background px-4 py-4 pl-10 pr-4 outline-none",
+            "absolute inset-0 z-0 w-full resize-none overflow-y-auto bg-transparent px-4 py-4 pl-10 pr-4 outline-none",
             "no-native-scrollbar whitespace-pre-wrap break-words",
             "focus-visible:ring-1 focus-visible:ring-ring",
             EDITOR_TEXT_CLASS,

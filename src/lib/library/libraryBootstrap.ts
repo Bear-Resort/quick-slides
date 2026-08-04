@@ -1,7 +1,7 @@
 import { connectLibraryRoot, getLibraryRoot } from "@/lib/library/deckStorage";
 import { refreshLibraryIndex } from "@/lib/library/libraryIndex";
 import type { LibraryIndexEntry } from "@/lib/library/deckFormat";
-import { usesBrowserStorageLibrary } from "@/lib/library/browserLibrary";
+import { getLibraryPreference } from "@/lib/library/libraryPreference";
 import { createAutoDefaultLibraryRoot } from "@/lib/library/fsAccess";
 import { getLibraryDisplayPath } from "@/lib/library/libraryPaths";
 
@@ -13,11 +13,15 @@ export type LibraryBootstrapResult = {
   storageMode: "disk" | "browser";
 };
 
-/** Try the saved library handle first; auto-create browser storage on Safari/Firefox. */
+function resolveStorageMode(): "disk" | "browser" {
+  return getLibraryPreference() === "custom" ? "disk" : "browser";
+}
+
+/** Try the saved library handle first; otherwise auto-create browser (OPFS) storage. */
 export async function bootstrapLibrary(): Promise<LibraryBootstrapResult> {
   let root = await getLibraryRoot();
 
-  if (!root && usesBrowserStorageLibrary()) {
+  if (!root) {
     const handle = await createAutoDefaultLibraryRoot();
     if (handle) {
       await connectLibraryRoot(handle, "default");
@@ -31,7 +35,7 @@ export async function bootstrapLibrary(): Promise<LibraryBootstrapResult> {
       root: null,
       decks: [],
       displayPath: getLibraryDisplayPath(null),
-      storageMode: usesBrowserStorageLibrary() ? "browser" : "disk",
+      storageMode: "browser",
     };
   }
 
@@ -41,6 +45,6 @@ export async function bootstrapLibrary(): Promise<LibraryBootstrapResult> {
     root,
     decks,
     displayPath: getLibraryDisplayPath(root),
-    storageMode: usesBrowserStorageLibrary() ? "browser" : "disk",
+    storageMode: resolveStorageMode(),
   };
 }

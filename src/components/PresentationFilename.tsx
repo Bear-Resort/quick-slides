@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Pencil } from "lucide-react";
 import {
   normalizePresentationFilename,
   setPresentationFilename,
@@ -10,11 +11,11 @@ import { cn } from "@/lib/utils";
 const copy = {
   en: {
     renameLabel: "Rename presentation",
-    renameHint: "Click to rename",
+    renameHint: "Rename",
   },
   zh: {
     renameLabel: "重命名演示文稿",
-    renameHint: "点击重命名",
+    renameHint: "重命名",
   },
 };
 
@@ -87,7 +88,7 @@ export function PresentationFilename({
         aria-label={t.renameLabel}
         className={cn(
           "w-full min-w-0 rounded-sm border border-transparent bg-transparent",
-          "text-lg font-semibold text-foreground outline-none",
+          "text-base font-semibold text-foreground outline-none",
           "border-b border-primary/40 focus:border-primary",
           className,
         )}
@@ -102,13 +103,18 @@ export function PresentationFilename({
       title={t.renameHint}
       aria-label={`${t.renameLabel}: ${name}`}
       className={cn(
-        "w-full min-w-0 truncate rounded-sm py-0.5 text-left text-lg font-semibold text-foreground",
-        "transition-colors hover:text-foreground/80 focus-visible:outline-none",
+        "group flex min-w-0 max-w-full items-center gap-1.5 rounded-sm py-0.5 text-left",
+        "text-base font-semibold text-foreground transition-colors",
+        "hover:text-foreground/80 focus-visible:outline-none",
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         className,
       )}
     >
-      {name}
+      <span className="min-w-0 truncate">{name}</span>
+      <Pencil
+        className="size-3.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-55 group-focus-visible:opacity-55"
+        aria-hidden
+      />
     </button>
   );
 }

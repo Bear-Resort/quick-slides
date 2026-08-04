@@ -12,6 +12,9 @@ export type SlideThemeId =
   | "bear-academy"
   | "the-beauties";
 
+/** Slide surface light/dark — independent of app chrome theme. */
+export type SlideColorMode = "light" | "dark";
+
 export type PresetSlideThemeId = Exclude<SlideThemeId, "regular">;
 
 export type SlideTheme = {
@@ -22,6 +25,21 @@ export type SlideTheme = {
   iconSwatch?: string;
   iconUrl?: string;
 };
+
+const SLIDE_THEME_IDS = new Set<SlideThemeId>([
+  "regular",
+  "gray",
+  "blue",
+  "red",
+  "green",
+  "purple",
+  "bear-academy",
+  "the-beauties",
+]);
+
+export function isSlideThemeId(value: string): value is SlideThemeId {
+  return SLIDE_THEME_IDS.has(value as SlideThemeId);
+}
 
 export const SLIDE_THEMES: SlideTheme[] = [
   {
@@ -98,6 +116,14 @@ export function getSlideThemeAttributes(
   return {
     className: cn("slide-theme-tinted", `slide-theme-${themeId}`),
   };
+}
+
+export function slideColorModeClass(mode: SlideColorMode): string {
+  return mode === "dark" ? "slide-color-dark" : "slide-color-light";
+}
+
+export function isSlideColorMode(value: string): value is SlideColorMode {
+  return value === "light" || value === "dark";
 }
 
 /** @deprecated Use getSlideThemeAttributes instead. */

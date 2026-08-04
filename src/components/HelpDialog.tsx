@@ -259,17 +259,17 @@ export function HelpDialog({
   return (
     <DialogPortal>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-[3px]"
         onClick={onClose}
       >
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby="quick-slides-help-title"
-          className="flex h-[min(90vh,820px)] max-h-[min(90vh,820px)] min-h-0 w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-gray-300 bg-background shadow-lg dark:border-gray-700"
+          className="glass-panel glass-panel-dialog flex h-[min(90vh,820px)] max-h-[min(90vh,820px)] min-h-0 w-full max-w-4xl flex-col overflow-hidden rounded-xl border shadow-lg"
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="flex shrink-0 items-center justify-between border-b border-gray-300 px-5 py-4 dark:border-gray-700">
+          <div className="glass-divider relative z-[1] flex shrink-0 items-center justify-between border-b px-5 py-4">
             <h2 id="quick-slides-help-title" className="text-lg font-bold">
               {t.title}
             </h2>
@@ -285,7 +285,7 @@ export function HelpDialog({
           </div>
 
           <HtmlScrollbarArea
-            className="flex-1"
+            className="relative z-[1] flex-1"
             contentClassName="px-5 py-4"
             refreshToken={language}
           >
@@ -336,14 +336,14 @@ export function HelpDialog({
                   {t.sections.instructions.body}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">{t.instructionsHint}</p>
-                <pre className="mt-3 max-h-64 overflow-auto rounded-lg border border-gray-300 bg-secondary p-3 font-mono text-xs leading-relaxed dark:border-gray-700">
+                <pre className="glass-panel mt-3 max-h-64 overflow-auto rounded-lg border p-3 font-mono text-xs leading-relaxed">
                   {QUICK_SLIDES_AI_INSTRUCTIONS}
                 </pre>
               </section>
             </div>
           </HtmlScrollbarArea>
 
-          <div className="flex shrink-0 justify-end border-t border-gray-300 px-5 py-4 dark:border-gray-700">
+          <div className="glass-divider relative z-[1] flex shrink-0 justify-end border-t px-5 py-4">
             <Button onClick={onClose}>{t.close}</Button>
           </div>
         </div>
@@ -370,7 +370,7 @@ export function HelpButton({ onLoadSample, hasEditorContent }: HelpButtonProps) 
         aria-label={t.help}
         title={t.help}
         onClick={() => setOpen(true)}
-        className="slide-locate-btn"
+        className="slide-locate-btn glass-toolbar-action"
       >
         <span className="text-base font-bold leading-none">?</span>
       </Button>

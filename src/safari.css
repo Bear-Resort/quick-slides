@@ -113,41 +113,41 @@
   }
 
   .home-split-slides .slide-action-present {
-    background-color: #18181b;
+    background-color: transparent;
     color: #fafafa;
   }
 
   .home-split-slides .slide-action-present:hover {
-    background-color: #27272a;
+    filter: brightness(1.06);
   }
 
   .night .home-split-slides .slide-action-present {
-    background-color: #e4e4e7;
-    color: #18181b;
-  }
-
-  .night .home-split-slides .slide-action-present:hover {
-    background-color: #d4d4d8;
-  }
-
-  .home-split-slides .slide-action-download {
-    border: 1px solid #d4d4d8;
-    background-color: #ffffff;
-    color: #18181b;
-  }
-
-  .home-split-slides .slide-action-download:hover {
-    background-color: #f4f4f5;
-  }
-
-  .night .home-split-slides .slide-action-download {
-    border-color: #3f3f46;
-    background-color: #18181b;
+    background-color: transparent;
     color: #fafafa;
   }
 
+  .night .home-split-slides .slide-action-present:hover {
+    filter: brightness(1.06);
+  }
+
+  .home-split-slides .slide-action-download {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background-color: transparent;
+    color: inherit;
+  }
+
+  .home-split-slides .slide-action-download:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .night .home-split-slides .slide-action-download {
+    border-color: rgba(255, 255, 255, 0.28);
+    background-color: transparent;
+    color: inherit;
+  }
+
   .night .home-split-slides .slide-action-download:hover {
-    background-color: #27272a;
+    background-color: rgba(255, 255, 255, 0.16);
   }
 
   .html-scroll-area {

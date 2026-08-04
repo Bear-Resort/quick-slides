@@ -14,72 +14,90 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
+  /* <alpha-value> keeps utilities like bg-primary/15 translucent */
+  --color-background: hsl(var(--background) / <alpha-value>);
+  --color-foreground: hsl(var(--foreground) / <alpha-value>);
+  --color-card: hsl(var(--card) / <alpha-value>);
+  --color-card-foreground: hsl(var(--card-foreground) / <alpha-value>);
+  --color-popover: hsl(var(--popover) / <alpha-value>);
+  --color-popover-foreground: hsl(var(--popover-foreground) / <alpha-value>);
+  --color-primary: hsl(var(--primary) / <alpha-value>);
+  --color-primary-foreground: hsl(var(--primary-foreground) / <alpha-value>);
+  --color-secondary: hsl(var(--secondary) / <alpha-value>);
+  --color-secondary-foreground: hsl(var(--secondary-foreground) / <alpha-value>);
+  --color-muted: hsl(var(--muted) / <alpha-value>);
+  --color-muted-foreground: hsl(var(--muted-foreground) / <alpha-value>);
+  --color-accent: hsl(var(--accent) / <alpha-value>);
+  --color-accent-foreground: hsl(var(--accent-foreground) / <alpha-value>);
+  --color-destructive: hsl(var(--destructive) / <alpha-value>);
+  --color-border: hsl(var(--border) / <alpha-value>);
+  --color-input: hsl(var(--input) / <alpha-value>);
+  --color-ring: hsl(var(--ring) / <alpha-value>);
 }
 
+/* Day — liquid glass, green accent (quick-tex style, green instead of blue) */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.141 0.005 285.823);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.141 0.005 285.823);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.21 0.006 285.885);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
-  --accent-foreground: oklch(0.21 0.006 285.885);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.705 0.015 286.067);
+  --radius: 0.875rem;
+  --background: 145 40% 96%;
+  --foreground: 155 35% 12%;
+  --card: 145 50% 99%;
+  --card-alpha: 0.38;
+  --card-foreground: 155 35% 12%;
+  --popover: 145 45% 98%;
+  --popover-alpha: 0.42;
+  --popover-foreground: 155 35% 12%;
+  --primary: 152 65% 36%;
+  --primary-foreground: 145 50% 98%;
+  --secondary: 145 30% 90%;
+  --secondary-foreground: 155 30% 18%;
+  --muted: 145 25% 92%;
+  --muted-alpha: 0.6;
+  --muted-foreground: 155 12% 40%;
+  --accent: 150 35% 88%;
+  --accent-alpha: 0.7;
+  --accent-foreground: 152 55% 28%;
+  --destructive: 0 72% 50%;
+  --border: 150 30% 50%;
+  --input: 145 30% 92%;
+  --ring: 152 65% 36%;
+  --bg-from: 145 45% 94%;
+  --bg-to: 155 35% 88%;
+  --bg-accent: 150 40% 74%;
 }
 
+/* Night — deep green ambient */
 .night {
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.21 0.006 285.885);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.21 0.006 285.885);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.92 0.004 286.32);
-  --primary-foreground: oklch(0.21 0.006 285.885);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.274 0.006 286.033);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.552 0.016 285.938);
+  --background: 155 40% 8%;
+  --foreground: 145 30% 96%;
+  --card: 155 32% 18%;
+  --card-alpha: 0.28;
+  --card-foreground: 145 30% 96%;
+  --popover: 155 34% 16%;
+  --popover-alpha: 0.32;
+  --popover-foreground: 145 30% 96%;
+  --primary: 152 72% 48%;
+  --primary-foreground: 155 40% 8%;
+  --secondary: 155 28% 16%;
+  --secondary-foreground: 145 30% 96%;
+  --muted: 155 22% 16%;
+  --muted-alpha: 0.38;
+  --muted-foreground: 150 14% 62%;
+  --accent: 155 40% 20%;
+  --accent-alpha: 0.5;
+  --accent-foreground: 152 70% 72%;
+  --destructive: 0 72% 55%;
+  --border: 145 40% 70%;
+  --input: 155 28% 14%;
+  --ring: 152 72% 48%;
+  --bg-from: 155 42% 7%;
+  --bg-to: 160 38% 9%;
+  --bg-accent: 150 48% 13%;
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    border-color: hsl(var(--border) / 0.14);
+    @apply outline-ring/50;
   }
   html,
   body,
@@ -90,26 +108,722 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    color: hsl(var(--foreground));
+    background: transparent;
     overflow: hidden;
     min-height: -webkit-fill-available;
+    -webkit-font-smoothing: antialiased;
   }
   * {
     font-family: "Noto Serif SC", serif;
   }
   a {
-    @apply text-blue-600 dark:text-blue-400 hover:underline;
+    @apply text-primary hover:underline;
   }
 }
 
 @layer components {
   .link {
-    @apply text-blue-600 dark:text-blue-400 hover:underline;
+    @apply text-primary hover:underline;
   }
 }
 
+/* —— Liquid glass (aligned with quick-tex, green primary) —— */
+
+.ambient-bg {
+  position: relative;
+  background: linear-gradient(
+    145deg,
+    hsl(var(--bg-from)) 0%,
+    hsl(var(--bg-to)) 42%,
+    hsl(var(--bg-accent) / 0.55) 100%
+  );
+}
+
+.ambient-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 22% 18%, hsl(var(--primary) / 0.1) 0%, transparent 48%),
+    radial-gradient(
+      ellipse 70% 65% at 100% 100%,
+      hsl(155 55% 10% / 0.08) 0%,
+      transparent 70%
+    ),
+    radial-gradient(circle at 88% 92%, hsl(150 50% 55% / 0.12) 0%, transparent 42%),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      hsl(0 0% 100% / 0.02) 2px,
+      hsl(0 0% 100% / 0.02) 4px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 2px,
+      hsl(0 0% 100% / 0.02) 2px,
+      hsl(0 0% 100% / 0.02) 4px
+    );
+  pointer-events: none;
+}
+
+.ambient-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 100% 80% at 50% 0%,
+    hsl(var(--primary) / 0.08),
+    transparent 60%
+  );
+  pointer-events: none;
+}
+
+.ambient-bg > * {
+  position: relative;
+  z-index: 1;
+}
+
+.night .ambient-bg {
+  background: linear-gradient(
+    152deg,
+    hsl(155 42% 8%) 0%,
+    hsl(160 38% 10%) 38%,
+    hsl(150 45% 9%) 72%,
+    hsl(155 50% 6%) 100%
+  );
+}
+
+.night .ambient-bg::before {
+  background-image:
+    radial-gradient(circle at 22% 18%, hsl(var(--primary) / 0.07) 0%, transparent 48%),
+    radial-gradient(
+      ellipse 70% 65% at 100% 100%,
+      hsl(155 60% 6% / 0.95) 0%,
+      hsl(155 50% 10% / 0.55) 35%,
+      transparent 70%
+    ),
+    radial-gradient(circle at 88% 92%, hsl(150 55% 16% / 0.35) 0%, transparent 42%),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      hsl(0 0% 100% / 0.015) 2px,
+      hsl(0 0% 100% / 0.015) 4px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 2px,
+      hsl(0 0% 100% / 0.015) 2px,
+      hsl(0 0% 100% / 0.015) 4px
+    );
+}
+
+.night .ambient-bg::after {
+  background:
+    radial-gradient(
+      ellipse 100% 80% at 50% 0%,
+      hsl(var(--primary) / 0.06),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 55% 50% at 100% 100%,
+      hsl(155 55% 5% / 0.55),
+      transparent 65%
+    );
+}
+
+.glass-panel {
+  position: relative;
+  isolation: isolate;
+  background: transparent;
+  border: 1px solid hsl(150 30% 40% / 0.18);
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.85),
+    inset 0 -1px 0 0 hsl(150 25% 35% / 0.06),
+    0 14px 44px hsl(150 30% 35% / 0.12);
+  border-radius: var(--radius);
+  color: hsl(var(--foreground));
+}
+
+.glass-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    155deg,
+    hsl(0 0% 100% / 0.72) 0%,
+    hsl(145 50% 99% / 0.55) 42%,
+    hsl(var(--card) / var(--card-alpha)) 78%,
+    hsl(145 40% 96% / 0.4) 100%
+  );
+  backdrop-filter: blur(40px) saturate(190%);
+  -webkit-backdrop-filter: blur(40px) saturate(190%);
+  box-shadow: inset 0 1px 0 0 hsl(0 0% 100% / 0.65);
+}
+
+.night .glass-panel {
+  border-color: hsl(0 0% 100% / 0.28);
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.34),
+    inset 0 -1px 0 0 hsl(0 0% 0% / 0.1),
+    0 14px 44px hsl(0 0% 0% / 0.2);
+}
+
+.night .glass-panel::before {
+  background: linear-gradient(
+    155deg,
+    hsl(145 30% 55% / 0.32) 0%,
+    hsl(var(--card) / calc(var(--card-alpha) + 0.1)) 38%,
+    hsl(var(--card) / var(--card-alpha)) 72%,
+    hsl(155 35% 16% / calc(var(--card-alpha) + 0.02)) 100%
+  );
+  backdrop-filter: blur(44px) saturate(200%);
+  -webkit-backdrop-filter: blur(44px) saturate(200%);
+  box-shadow: inset 0 1px 0 0 hsl(0 0% 100% / 0.18);
+}
+
+.glass-panel-dialog {
+  border-color: hsl(150 30% 40% / 0.2);
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.9),
+    inset 0 -1px 0 0 hsl(150 25% 35% / 0.04),
+    0 16px 48px hsl(150 30% 30% / 0.16);
+}
+
+.glass-panel-dialog::before {
+  background: linear-gradient(
+    155deg,
+    hsl(0 0% 100% / 0.82) 0%,
+    hsl(145 50% 99% / 0.7) 48%,
+    hsl(145 40% 97% / 0.58) 100%
+  );
+}
+
+.night .glass-panel-dialog {
+  border-color: hsl(0 0% 100% / 0.28);
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.28),
+    inset 0 -1px 0 0 hsl(0 0% 0% / 0.04),
+    0 16px 48px hsl(0 0% 0% / 0.22);
+}
+
+.night .glass-panel-dialog::before {
+  background: linear-gradient(
+    155deg,
+    hsl(145 28% 52% / 0.5) 0%,
+    hsl(155 26% 42% / 0.44) 42%,
+    hsl(155 28% 34% / 0.4) 100%
+  );
+}
+
+.glass-toolbar {
+  position: relative;
+  isolation: isolate;
+  background: transparent;
+  border-bottom: 1px solid hsl(150 25% 40% / 0.12);
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.85),
+    inset 0 -1px 0 0 hsl(150 25% 35% / 0.04);
+  color: hsl(var(--foreground));
+}
+
+.glass-toolbar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    hsl(0 0% 100% / 0.65) 0%,
+    hsl(145 45% 98% / 0.4) 100%
+  );
+  backdrop-filter: blur(28px) saturate(115%);
+  -webkit-backdrop-filter: blur(28px) saturate(115%);
+}
+
+.night .glass-toolbar {
+  border-bottom-color: hsl(0 0% 100% / 0.12);
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.14),
+    inset 0 -1px 0 0 hsl(0 0% 0% / 0.08);
+  color: hsl(var(--foreground));
+}
+
+.night .glass-toolbar::before {
+  background: linear-gradient(
+    180deg,
+    hsl(155 22% 18% / 0.55) 0%,
+    hsl(155 18% 12% / 0.42) 55%,
+    hsl(155 16% 10% / 0.5) 100%
+  );
+}
+
+.glass-primary {
+  --glass-primary-fg: 0 0% 100%;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid hsl(var(--primary) / 0.4) !important;
+  background: transparent !important;
+  color: hsl(var(--glass-primary-fg)) !important;
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.45),
+    inset 0 -1px 0 0 hsl(var(--primary) / 0.15),
+    0 2px 14px hsl(var(--primary) / 0.22) !important;
+  text-shadow: none;
+}
+
+.glass-primary > * {
+  position: relative;
+  z-index: 1;
+}
+
+.glass-primary::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    160deg,
+    hsl(var(--primary) / 0.92) 0%,
+    hsl(var(--primary) / 0.72) 55%,
+    hsl(152 55% 30% / 0.78) 100%
+  );
+  backdrop-filter: blur(18px) saturate(165%);
+  -webkit-backdrop-filter: blur(18px) saturate(165%);
+}
+
+.glass-primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.night .glass-primary::before {
+  background: linear-gradient(
+    160deg,
+    hsl(var(--primary) / 0.78) 0%,
+    hsl(152 60% 36% / 0.62) 48%,
+    hsl(155 50% 28% / 0.58) 100%
+  );
+}
+
+.night .glass-primary {
+  text-shadow: 0 1px 1px hsl(155 50% 8% / 0.3);
+}
+
+.glass-toolbar-action {
+  border-radius: 0.65rem !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  box-shadow: none;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.2s ease;
+}
+
+.glass-toolbar-action:hover:not(:disabled),
+.glass-toolbar-action[data-state="open"] {
+  background: linear-gradient(
+    165deg,
+    hsl(0 0% 100% / 0.85) 0%,
+    hsl(145 40% 97% / 0.55) 100%
+  ) !important;
+  border-color: hsl(150 25% 40% / 0.16) !important;
+  color: hsl(var(--foreground)) !important;
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.9),
+    0 3px 12px hsl(150 25% 35% / 0.1) !important;
+  backdrop-filter: blur(16px) saturate(170%);
+  -webkit-backdrop-filter: blur(16px) saturate(170%);
+}
+
+.night .glass-toolbar-action:hover:not(:disabled),
+.night .glass-toolbar-action[data-state="open"] {
+  background: linear-gradient(
+    165deg,
+    hsl(0 0% 100% / 0.28) 0%,
+    hsl(var(--foreground) / 0.12) 100%
+  ) !important;
+  border-color: hsl(0 0% 100% / 0.28) !important;
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.4),
+    inset 0 -1px 0 0 hsl(0 0% 0% / 0.08),
+    0 3px 12px hsl(0 0% 0% / 0.16) !important;
+}
+
+.glass-menu-separator {
+  display: block;
+  height: 1px;
+  margin: 0.375rem 0.25rem;
+  background-color: hsl(var(--foreground) / 0.1);
+  border: 0;
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+.night .glass-menu-separator {
+  background-color: hsl(0 0% 100% / 0.1);
+}
+
+.menu-item-invert:hover:not([data-disabled]),
+.menu-item-invert[data-highlighted],
+.menu-item-invert:focus {
+  background-color: hsl(var(--foreground)) !important;
+  color: hsl(var(--background)) !important;
+}
+
+.menu-item-invert:hover:not([data-disabled]) .text-muted-foreground,
+.menu-item-invert[data-highlighted] .text-muted-foreground,
+.menu-item-invert:focus .text-muted-foreground {
+  color: hsl(var(--background) / 0.7) !important;
+}
+
+.menu-item-invert:hover:not([data-disabled]) svg,
+.menu-item-invert[data-highlighted] svg,
+.menu-item-invert:focus svg {
+  color: hsl(var(--background)) !important;
+  opacity: 0.85;
+}
+
+.glow-button {
+  box-shadow:
+    0 0 24px hsl(var(--primary) / 0.3),
+    inset 0 1px 0 hsl(0 0% 100% / 0.15);
+}
+
+.glass-divider {
+  border-color: hsl(var(--border) / 0.18) !important;
+}
+
+.night .glass-divider {
+  border-color: hsl(0 0% 100% / 0.12) !important;
+}
+
+/* Floating toolbar chrome (quick-tex style) */
+.glass-panel.glass-chrome {
+  overflow: visible;
+}
+
+.qs-toolbar-layer {
+  position: relative;
+  z-index: 40;
+}
+
+/* Muted strip at the top of workspace panels (file-tab / section chrome) */
+.panel-chrome {
+  position: relative;
+  isolation: isolate;
+  background: transparent;
+  border-bottom: 1px solid hsl(150 25% 40% / 0.12);
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.55),
+    inset 0 -1px 0 0 hsl(150 25% 35% / 0.04);
+  color: hsl(var(--muted-foreground));
+}
+
+.panel-chrome::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    hsl(0 0% 100% / 0.55) 0%,
+    hsl(145 35% 94% / 0.42) 100%
+  );
+  backdrop-filter: blur(22px) saturate(130%);
+  -webkit-backdrop-filter: blur(22px) saturate(130%);
+}
+
+.night .panel-chrome {
+  border-bottom-color: hsl(0 0% 100% / 0.1);
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.1),
+    inset 0 -1px 0 0 hsl(0 0% 0% / 0.12);
+  color: hsl(var(--muted-foreground));
+}
+
+.night .panel-chrome::before {
+  background: linear-gradient(
+    180deg,
+    hsl(155 20% 16% / 0.72) 0%,
+    hsl(155 18% 12% / 0.55) 100%
+  );
+}
+
+/* Segmented tabs (settings theme control) */
+.glass-seg-track {
+  --glass-seg-radius: 1.125rem;
+  --glass-seg-pad: 0.25rem;
+  --glass-seg-inner-radius: calc(var(--glass-seg-radius) - var(--glass-seg-pad));
+  --glass-seg-active-fg: 155 35% 12%;
+
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--glass-seg-radius);
+  padding: var(--glass-seg-pad);
+  border: 1px solid hsl(0 0% 100% / 0.2);
+  background: linear-gradient(
+    180deg,
+    hsl(var(--foreground) / 0.08) 0%,
+    hsl(var(--foreground) / 0.04) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.28),
+    inset 0 -1px 0 0 hsl(0 0% 0% / 0.08),
+    0 1px 2px hsl(0 0% 0% / 0.06);
+  backdrop-filter: blur(22px) saturate(170%);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+}
+
+.glass-seg-active {
+  border-radius: var(--glass-seg-inner-radius);
+  border: 1px solid hsl(0 0% 100% / 0.55);
+  background: linear-gradient(
+    165deg,
+    hsl(0 0% 100% / 0.92) 0%,
+    hsl(145 40% 96% / 0.78) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.95),
+    inset 0 -1px 0 0 hsl(155 30% 20% / 0.06),
+    0 4px 18px hsl(0 0% 0% / 0.2);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+}
+
+.glass-seg-track > [role="tab"],
+.glass-seg-track > [role="radio"] {
+  border-radius: var(--glass-seg-inner-radius);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.glass-seg-track > [role="tab"][data-state="inactive"]:hover,
+.glass-seg-track > [role="radio"]:not([aria-checked="true"]):hover {
+  background: hsl(var(--foreground) / 0.08);
+  color: hsl(var(--foreground));
+}
+
+.glass-seg-track > [role="tab"][data-state="active"],
+.glass-seg-track > [role="radio"][aria-checked="true"] {
+  color: hsl(var(--glass-seg-active-fg));
+}
+
+.night .glass-seg-track {
+  --glass-seg-active-fg: 155 35% 12%;
+}
+
+:root:not(.night) .glass-seg-track {
+  --glass-seg-active-fg: 0 0% 100%;
+}
+
+:root:not(.night) .glass-seg-active {
+  border-color: hsl(var(--primary) / 0.4);
+  background: linear-gradient(
+    165deg,
+    hsl(var(--primary) / 0.88) 0%,
+    hsl(var(--primary) / 0.65) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.45),
+    0 4px 16px hsl(var(--primary) / 0.22);
+}
+
+.glass-toggle {
+  position: relative;
+  width: 2.75rem;
+  height: 1.55rem;
+  border-radius: 9999px;
+  border: 1px solid hsl(0 0% 100% / 0.2);
+  background: linear-gradient(
+    180deg,
+    hsl(var(--foreground) / 0.1) 0%,
+    hsl(var(--foreground) / 0.05) 100%
+  );
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.glass-toggle[aria-checked="true"] {
+  border-color: hsl(var(--primary) / 0.45);
+  background: linear-gradient(
+    165deg,
+    hsl(var(--primary) / 0.85) 0%,
+    hsl(var(--primary) / 0.55) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.35),
+    0 2px 10px hsl(var(--primary) / 0.28);
+}
+
+.glass-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 9999px;
+  background: linear-gradient(165deg, hsl(0 0% 100% / 0.95), hsl(145 30% 96% / 0.85));
+  box-shadow: 0 1px 4px hsl(0 0% 0% / 0.2);
+  transition: transform 0.2s ease;
+}
+
+.glass-toggle[aria-checked="true"] .glass-toggle-thumb {
+  transform: translateX(1.2rem);
+}
+
+.glass-input {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--foreground) / 0.08) 0%,
+    hsl(var(--input) / 0.4) 100%
+  );
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid hsl(0 0% 100% / 0.16);
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.18),
+    inset 0 -1px 0 0 hsl(0 0% 0% / 0.04);
+  color: hsl(var(--foreground));
+}
+
+:root:not(.night) .glass-input {
+  border-color: hsl(150 25% 40% / 0.14);
+  background: linear-gradient(
+    180deg,
+    hsl(0 0% 100% / 0.75) 0%,
+    hsl(145 40% 96% / 0.55) 100%
+  );
+}
+
+.glass-input:focus {
+  outline: none;
+  border-color: hsl(var(--primary) / 0.5);
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.2),
+    0 0 0 2px hsl(var(--ring) / 0.25);
+}
+
+/* Theme swatch lift on hover */
+.theme-swatch {
+  position: relative;
+  z-index: 1;
+  transition:
+    transform 0.18s ease,
+    z-index 0s;
+}
+
+.theme-swatch:hover,
+.theme-swatch:focus-visible {
+  z-index: 60;
+  transform: translateY(-3px) scale(1.08);
+}
+
+.theme-swatch:hover .theme-swatch-face,
+.theme-swatch:focus-visible .theme-swatch-face {
+  box-shadow:
+    0 8px 20px hsl(0 0% 0% / 0.28),
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.35);
+}
+
+/* Energy Save — near-black green surfaces, no glass/blur */
+html.energy-save {
+  --background: 155 22% 3%;
+  --foreground: 145 12% 88%;
+  --card: 155 18% 6%;
+  --card-alpha: 1;
+  --primary: 152 40% 38%;
+  --primary-foreground: 145 20% 96%;
+  --muted: 155 14% 10%;
+  --muted-foreground: 145 8% 58%;
+  --accent: 155 16% 12%;
+  --border: 150 16% 28%;
+  --bg-from: 155 24% 2%;
+  --bg-to: 155 20% 4%;
+  --bg-accent: 150 22% 6%;
+}
+
+html.energy-save .ambient-bg {
+  background: hsl(var(--background)) !important;
+}
+
+html.energy-save .ambient-bg::before,
+html.energy-save .ambient-bg::after {
+  display: none !important;
+}
+
+html.energy-save .glass-panel,
+html.energy-save .glass-toolbar,
+html.energy-save .panel-chrome,
+html.energy-save .glass-input,
+html.energy-save .glass-toggle,
+html.energy-save .glass-seg-track,
+html.energy-save .glass-seg-active,
+html.energy-save .glass-primary {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.energy-save .glass-panel::before,
+html.energy-save .glass-panel-dialog::before,
+html.energy-save .glass-toolbar::before,
+html.energy-save .panel-chrome::before,
+html.energy-save .glass-primary::before {
+  display: none !important;
+}
+
+html.energy-save .glass-panel {
+  background: hsl(var(--card)) !important;
+  border-color: hsl(var(--border)) !important;
+  box-shadow: none !important;
+}
+
+html.energy-save .glass-chrome {
+  background: hsl(155 20% 10%) !important;
+}
+
+html.energy-save .panel-chrome {
+  background: hsl(155 18% 8%) !important;
+  box-shadow: none !important;
+}
+
+html.energy-save .glass-primary {
+  background: hsl(var(--primary)) !important;
+  box-shadow: none !important;
+}
+
+html.energy-save .glass-seg-active {
+  background: hsl(var(--primary)) !important;
+  border-color: transparent !important;
+  color: hsl(var(--primary-foreground)) !important;
+  box-shadow: none !important;
+}
+
+html.energy-save .glass-toggle[aria-checked="true"] {
+  background: hsl(var(--primary)) !important;
+}
+
 .night .markdown-preview .katex {
-  color: var(--foreground);
+  color: hsl(var(--foreground));
 }
 
 /* KaTeX expects line-height 1.2; slide body line-height breaks glyph placement in html2canvas. */
@@ -149,8 +863,8 @@
 .slide-frame {
   background: linear-gradient(
     180deg,
-    var(--card) 0%,
-    color-mix(in oklch, var(--card) 92%, var(--muted)) 100%
+    hsl(var(--card)) 0%,
+    color-mix(in srgb, hsl(var(--card)) 92%, hsl(var(--muted))) 100%
   );
 }
 
@@ -436,15 +1150,15 @@
 
 .slide-table-th,
 .slide-table-td {
-  border: 2px solid color-mix(in oklch, var(--foreground) 22%, transparent);
+  border: 2px solid color-mix(in srgb, hsl(var(--slide-fg, var(--foreground))) 22%, transparent);
 }
 
 .slide-theme-regular .slide-table-th {
-  background: color-mix(in oklch, var(--muted) 88%, var(--card));
+  background: color-mix(in srgb, hsl(var(--slide-muted, var(--muted))) 88%, hsl(var(--slide-bg, var(--card))));
 }
 
 .slide-theme-regular .slide-table-td {
-  background: var(--card);
+  background: hsl(var(--slide-bg, var(--card)));
 }
 
 .slide-theme-tinted .slide-table-th {
@@ -462,13 +1176,63 @@
 }
 
 .slide-theme-tinted .slide-table-td {
-  background: var(--card);
-  border-color: color-mix(in oklch, var(--slide-theme-title-from) 28%, var(--border));
+  background: hsl(var(--slide-bg, var(--card)));
+  border-color: color-mix(in srgb, var(--slide-theme-title-from) 28%, hsl(var(--slide-border, var(--border))));
+}
+
+/* Slide surface light/dark — canvas/fill + text only (not chrome bars) */
+.slide-color-light {
+  --slide-fg: 240 6% 10%;
+  --slide-bg: 0 0% 100%;
+  --slide-muted: 240 5% 96%;
+  --slide-muted-fg: 240 4% 46%;
+  --slide-border: 240 6% 90%;
+  --slide-secondary: 240 5% 96%;
+  color: hsl(var(--slide-fg));
+}
+
+.slide-color-dark {
+  --slide-fg: 0 0% 98%;
+  --slide-bg: 240 6% 10%;
+  --slide-muted: 240 4% 16%;
+  --slide-muted-fg: 240 5% 64%;
+  --slide-border: 240 4% 22%;
+  --slide-secondary: 240 4% 16%;
+  color: hsl(var(--slide-fg));
+}
+
+.slide-color-light.slide-theme-regular,
+.slide-color-dark.slide-theme-regular,
+.slide-color-light .slide-theme-regular,
+.slide-color-dark .slide-theme-regular {
+  --slide-theme-title-block: hsl(var(--slide-bg));
+}
+
+.slide-color-light.slide-theme-regular .slide-canvas,
+.slide-color-light .slide-theme-regular .slide-canvas {
+  background: #ffffff;
+}
+
+.slide-color-dark.slide-theme-regular .slide-canvas,
+.slide-color-dark .slide-theme-regular .slide-canvas {
+  background: hsl(var(--slide-bg));
+}
+
+/* Map Tailwind/app color tokens to slide surface inside the canvas only */
+.slide-color-light .slide-canvas,
+.slide-color-dark .slide-canvas {
+  --foreground: var(--slide-fg);
+  --muted-foreground: var(--slide-muted-fg);
+  --muted: var(--slide-muted);
+  --secondary: var(--slide-secondary);
+  --border: var(--slide-border);
+  --card: var(--slide-bg);
+  --card-foreground: var(--slide-fg);
 }
 
 /* Theme tokens — structure is shared; only slide title colors differ. */
 .slide-theme-regular {
-  --slide-theme-title-block: var(--card);
+  --slide-theme-title-block: hsl(var(--slide-bg, var(--card)));
 }
 
 .slide-theme-tinted {
@@ -507,7 +1271,7 @@
 :is(.slide-theme-bear-academy, .slide-theme-the-beauties) .slide-sticker-decoration {
   position: absolute;
   pointer-events: none;
-  z-index: 1;
+  z-index: 0;
   object-fit: contain;
 }
 
@@ -612,7 +1376,8 @@
   --slide-theme-code-bg: oklch(0.86 0.008 286);
 }
 
-.night .slide-theme-tinted {
+.slide-color-dark.slide-theme-tinted,
+.slide-color-dark .slide-theme-tinted {
   --slide-theme-canvas-from: oklch(0.2 0.06 var(--slide-theme-hue));
   --slide-theme-canvas-to: oklch(0.3 0.08 var(--slide-theme-hue));
   --slide-theme-title-from: oklch(0.82 0.08 var(--slide-theme-hue));
@@ -621,7 +1386,8 @@
   --slide-theme-code-bg: oklch(0.26 0.055 var(--slide-theme-hue));
 }
 
-.night .slide-theme-tinted.slide-theme-gray {
+.slide-color-dark.slide-theme-tinted.slide-theme-gray,
+.slide-color-dark .slide-theme-tinted.slide-theme-gray {
   --slide-theme-canvas-from: oklch(0.18 0.008 286);
   --slide-theme-canvas-to: oklch(0.28 0.01 286);
   --slide-theme-title-from: oklch(0.78 0.01 286);
@@ -631,7 +1397,7 @@
 }
 
 .slide-code-bg {
-  background-color: var(--secondary);
+  background-color: hsl(var(--slide-secondary, var(--secondary)));
 }
 
 .slide-theme-tinted .slide-code-bg {
@@ -651,60 +1417,52 @@
   );
 }
 
-.slide-frame-bar,
-.app-header-bar {
-  background: linear-gradient(
-    180deg,
-    oklch(0.4 0.01 286) 0%,
-    oklch(0.3 0.01 286) 100%
-  );
-  border-color: oklch(0.28 0.01 286);
-  color: oklch(0.95 0 0);
+.slide-canvas {
+  background: hsl(var(--slide-bg, var(--card)));
+  color: hsl(var(--slide-fg, var(--foreground)));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, hsl(var(--slide-border, var(--border))) 50%, transparent);
+}
+
+/* Frame / header bars use .glass-toolbar; keep locate-btn for slide chrome */
+.slide-frame-bar {
+  color: hsl(var(--foreground));
 }
 
 .app-header-bar button.slide-locate-btn,
-.app-header-bar .slide-locate-btn {
-  border-color: color-mix(in oklch, currentColor 35%, transparent);
-  background: color-mix(in oklch, currentColor 12%, transparent);
+.app-header-bar .slide-locate-btn,
+.slide-locate-btn {
+  border-color: hsl(var(--border) / 0.28);
+  background: hsl(var(--foreground) / 0.06);
   color: inherit;
   box-shadow: none;
 }
 
 .app-header-bar button.slide-locate-btn:hover,
-.app-header-bar .slide-locate-btn:hover {
-  background: color-mix(in oklch, currentColor 22%, transparent);
-  color: inherit;
-}
-
-.slide-locate-btn {
-  border-color: color-mix(in oklch, currentColor 35%, transparent);
-  background: color-mix(in oklch, currentColor 12%, transparent);
-  color: inherit;
-}
-
+.app-header-bar .slide-locate-btn:hover,
 .slide-locate-btn:hover {
-  background: color-mix(in oklch, currentColor 22%, transparent);
+  background: hsl(var(--foreground) / 0.12);
+  color: inherit;
 }
 
 .editor-locate-btn {
-  border-color: var(--border);
-  background: var(--secondary);
-  color: var(--foreground);
+  border-color: hsl(var(--border) / 0.28);
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
 }
 
 .editor-locate-btn:hover {
-  background: var(--accent);
-  color: var(--accent-foreground);
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
 }
 
 .editor-insert-btn {
-  border-color: var(--border);
-  background: var(--background);
+  border-color: hsl(var(--border) / 0.28);
+  background: hsl(var(--background) / 0.55);
 }
 
 .editor-insert-btn:hover {
-  background: var(--accent);
-  color: var(--accent-foreground);
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
 }
 
 .editor-placeholder-chip {
@@ -714,8 +1472,8 @@
   justify-content: center;
   gap: 0.125rem;
   border-radius: 3px;
-  border: 1px dashed color-mix(in oklch, var(--muted-foreground) 45%, var(--border));
-  background: var(--background);
+  border: 1px dashed color-mix(in srgb, hsl(var(--muted-foreground)) 45%, hsl(var(--border)));
+  background: hsl(var(--background));
   padding: 0;
   cursor: pointer;
   overflow: hidden;
@@ -725,7 +1483,7 @@
   letter-spacing: 0.03em;
   line-height: 1;
   text-transform: uppercase;
-  color: var(--muted-foreground);
+  color: hsl(var(--muted-foreground));
   transition:
     background-color 120ms ease,
     border-color 120ms ease,
@@ -733,9 +1491,9 @@
 }
 
 .editor-placeholder-chip:hover {
-  background: var(--accent);
-  border-color: color-mix(in oklch, var(--foreground) 35%, var(--border));
-  color: var(--accent-foreground);
+  background: hsl(var(--accent));
+  border-color: color-mix(in srgb, hsl(var(--foreground)) 35%, hsl(var(--border)));
+  color: hsl(var(--accent-foreground));
 }
 
 .editor-placeholder-chip-label {
@@ -746,58 +1504,58 @@
 }
 
 .editor-placeholder-chip-title {
-  border-color: color-mix(in oklch, var(--primary) 55%, var(--border));
-  background: color-mix(in oklch, var(--primary) 12%, var(--background));
+  border-color: color-mix(in srgb, hsl(var(--primary)) 55%, hsl(var(--border)));
+  background: color-mix(in srgb, hsl(var(--primary)) 12%, hsl(var(--background)));
 }
 
 .editor-placeholder-chip-subtitle {
-  border-color: color-mix(in oklch, var(--primary) 45%, var(--border));
-  background: color-mix(in oklch, var(--primary) 8%, var(--background));
+  border-color: color-mix(in srgb, hsl(var(--primary)) 45%, hsl(var(--border)));
+  background: color-mix(in srgb, hsl(var(--primary)) 8%, hsl(var(--background)));
 }
 
 .editor-placeholder-chip-pageTitle {
-  border-color: color-mix(in oklch, var(--primary) 50%, var(--border));
-  background: color-mix(in oklch, var(--primary) 10%, var(--background));
+  border-color: color-mix(in srgb, hsl(var(--primary)) 50%, hsl(var(--border)));
+  background: color-mix(in srgb, hsl(var(--primary)) 10%, hsl(var(--background)));
 }
 
 .editor-placeholder-chip-listItem {
-  border-color: color-mix(in oklch, var(--muted-foreground) 42%, var(--border));
+  border-color: color-mix(in srgb, hsl(var(--muted-foreground)) 42%, hsl(var(--border)));
 }
 
 .editor-placeholder-chip-equation {
-  border-color: color-mix(in oklch, #6366f1 40%, var(--border));
-  background: color-mix(in oklch, #6366f1 8%, var(--background));
-  color: color-mix(in oklch, #6366f1 75%, var(--muted-foreground));
+  border-color: color-mix(in srgb, hsl(var(--primary)) 40%, hsl(var(--border)));
+  background: color-mix(in srgb, hsl(var(--primary)) 8%, hsl(var(--background)));
+  color: color-mix(in srgb, hsl(var(--primary)) 75%, hsl(var(--muted-foreground)));
 }
 
 .editor-placeholder-chip-comment {
-  border-color: color-mix(in oklch, var(--muted-foreground) 38%, var(--border));
-  background: color-mix(in oklch, var(--muted) 55%, var(--background));
+  border-color: color-mix(in srgb, hsl(var(--muted-foreground)) 38%, hsl(var(--border)));
+  background: color-mix(in srgb, hsl(var(--muted)) 55%, hsl(var(--background)));
   font-style: italic;
   text-transform: none;
   letter-spacing: 0;
 }
 
 .editor-placeholder-chip-alt {
-  border-color: color-mix(in oklch, var(--muted-foreground) 50%, var(--border));
+  border-color: color-mix(in srgb, hsl(var(--muted-foreground)) 50%, hsl(var(--border)));
 }
 
 .editor-placeholder-chip-url {
-  border-color: color-mix(in oklch, var(--primary) 40%, var(--border));
-  background: color-mix(in oklch, var(--primary) 8%, var(--background));
+  border-color: color-mix(in srgb, hsl(var(--primary)) 40%, hsl(var(--border)));
+  background: color-mix(in srgb, hsl(var(--primary)) 8%, hsl(var(--background)));
 }
 
 .editor-placeholder-chip-url:hover {
-  background: color-mix(in oklch, var(--primary) 16%, var(--background));
+  background: color-mix(in srgb, hsl(var(--primary)) 16%, hsl(var(--background)));
 }
 
 .editor-placeholder-chip-header {
-  border-color: color-mix(in oklch, var(--primary) 50%, var(--border));
-  background: color-mix(in oklch, var(--primary) 10%, var(--background));
+  border-color: color-mix(in srgb, hsl(var(--primary)) 50%, hsl(var(--border)));
+  background: color-mix(in srgb, hsl(var(--primary)) 10%, hsl(var(--background)));
 }
 
 .editor-placeholder-chip-cell {
-  border-color: color-mix(in oklch, var(--muted-foreground) 45%, var(--border));
+  border-color: color-mix(in srgb, hsl(var(--muted-foreground)) 45%, hsl(var(--border)));
 }
 
 .slide-theme-regular .slide-content-heading,
@@ -837,10 +1595,6 @@
   color: inherit;
 }
 
-.slide-canvas {
-  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--border) 50%, transparent);
-}
-
 .page-enter {
   animation: pageEnter 0.8s ease-out forwards;
 }
@@ -868,15 +1622,15 @@
 }
 
 .html-scroll-area {
-  --scrollbar-track: color-mix(in oklch, var(--muted-foreground) 16%, transparent);
-  --scrollbar-thumb: color-mix(in oklch, var(--muted-foreground) 42%, transparent);
-  --scrollbar-thumb-hover: color-mix(in oklch, var(--muted-foreground) 58%, transparent);
+  --scrollbar-track: color-mix(in srgb, hsl(var(--muted-foreground)) 16%, transparent);
+  --scrollbar-thumb: color-mix(in srgb, hsl(var(--muted-foreground)) 42%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, hsl(var(--muted-foreground)) 58%, transparent);
 }
 
 .night .html-scroll-area {
-  --scrollbar-track: color-mix(in oklch, var(--muted-foreground) 22%, transparent);
-  --scrollbar-thumb: color-mix(in oklch, var(--muted-foreground) 50%, transparent);
-  --scrollbar-thumb-hover: color-mix(in oklch, var(--muted-foreground) 66%, transparent);
+  --scrollbar-track: color-mix(in srgb, hsl(var(--muted-foreground)) 22%, transparent);
+  --scrollbar-thumb: color-mix(in srgb, hsl(var(--muted-foreground)) 50%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, hsl(var(--muted-foreground)) 66%, transparent);
 }
 
 .html-scrollbar {

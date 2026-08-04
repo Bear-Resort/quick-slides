@@ -39,6 +39,7 @@ jobs:
         run: pnpm build
         env:
           GITHUB_PAGES: "true"
+          VITE_GITHUB_CLIENT_ID: ${{ secrets.VITE_GITHUB_CLIENT_ID }}
 
       - name: Add SPA fallback
         run: cp dist/index.html dist/404.html

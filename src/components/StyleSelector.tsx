@@ -1,19 +1,41 @@
-import { SLIDE_THEMES, type SlideThemeId } from "@/lib/slideThemes";
+import { useEffect, useState } from "react";
+import { Moon, Palette, Sun, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { DialogPortal } from "@/components/ui/dialog-portal";
+import {
+  SLIDE_THEMES,
+  type SlideColorMode,
+  type SlideThemeId,
+} from "@/lib/slideThemes";
 import { useLanguage } from "@/lib/useLanguage";
 import { cn } from "@/lib/utils";
 
 const copy = {
   en: {
-    label: "Theme",
+    theme: "Theme",
+    dialogTitle: "Slide theme",
+    style: "Style",
+    color: "Color",
+    slideLight: "Light",
+    slideDark: "Dark",
+    close: "Close",
   },
   zh: {
-    label: "主题",
+    theme: "主题",
+    dialogTitle: "幻灯片主题",
+    style: "样式",
+    color: "颜色",
+    slideLight: "浅色",
+    slideDark: "深色",
+    close: "关闭",
   },
 } as const;
 
 type StyleSelectorProps = {
   value: SlideThemeId;
+  colorMode: SlideColorMode;
   onChange: (themeId: SlideThemeId) => void;
+  onColorModeChange: (mode: SlideColorMode) => void;
 };
 
 function ThemeSwatch({
@@ -38,13 +60,19 @@ function ThemeSwatch({
       type="button"
       aria-label={label}
       aria-pressed={selected}
+      title={label}
       onClick={onClick}
-      className="group relative overflow-visible rounded-lg p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className={cn(
+        "theme-swatch group/swatch relative size-8 shrink-0 overflow-visible rounded-md p-0",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+      )}
     >
       <span
         className={cn(
-          "relative block size-8 overflow-hidden rounded-md border border-gray-300/80 shadow-sm transition-transform group-hover:scale-105 dark:border-gray-600",
-          selected && "ring-2 ring-ring ring-offset-1 ring-offset-background",
+          "theme-swatch-face absolute inset-0 overflow-hidden rounded-md border-2 transition-[box-shadow,border-color]",
+          selected
+            ? "border-foreground shadow-[0_0_0_1px_hsl(var(--background))]"
+            : "border-transparent group-hover/swatch:border-foreground/35",
         )}
         style={{ backgroundColor: swatchBackground }}
       >
@@ -53,13 +81,19 @@ function ThemeSwatch({
             src={iconUrl}
             alt=""
             aria-hidden
-            className="absolute inset-0 size-full object-contain p-1"
+            className="absolute inset-0 size-full object-contain p-0.5"
           />
         ) : null}
       </span>
       <span
         role="tooltip"
-        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-gray-300 bg-popover px-2 py-1 text-xs font-medium text-popover-foreground opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 dark:border-gray-700"
+        className={cn(
+          "pointer-events-none absolute left-1/2 top-[calc(100%+6px)] z-[70] -translate-x-1/2",
+          "whitespace-nowrap rounded-md border border-white/15 bg-background/95 px-2 py-1",
+          "text-[10px] font-medium text-foreground shadow-md backdrop-blur-sm",
+          "opacity-0 transition-opacity duration-150",
+          "group-hover/swatch:opacity-100 group-focus-visible/swatch:opacity-100",
+        )}
       >
         {label}
       </span>
@@ -67,55 +101,161 @@ function ThemeSwatch({
   );
 }
 
-export function StyleSelector({ value, onChange }: StyleSelectorProps) {
+function ThemeDialog({
+  open,
+  onClose,
+  value,
+  colorMode,
+  onChange,
+  onColorModeChange,
+}: StyleSelectorProps & { open: boolean; onClose: () => void }) {
   const language = useLanguage();
   const t = copy[language];
-  const activeTheme =
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const colorModes: Array<{ id: SlideColorMode; label: string; icon: typeof Sun }> = [
+    { id: "light", label: t.slideLight, icon: Sun },
+    { id: "dark", label: t.slideDark, icon: Moon },
+  ];
+
+  const selectedTheme =
     SLIDE_THEMES.find((theme) => theme.id === value) ?? SLIDE_THEMES[0];
-  const activeSwatchBackground =
-    activeTheme.iconUrl && activeTheme.iconSwatch
-      ? activeTheme.iconSwatch
-      : activeTheme.swatch;
+  const selectedName = selectedTheme?.name[language] ?? "";
 
   return (
-    <div className="relative z-30 shrink-0 space-y-2 overflow-visible border-b border-gray-300 px-4 py-2 dark:border-gray-700">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-semibold tracking-wide text-muted-foreground">
-          {t.label}
-        </span>
-        <span
-          className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-foreground"
-          aria-live="polite"
+    <DialogPortal>
+      <div
+        className="fixed inset-0 z-[200] flex items-center justify-center bg-black/35 p-4 backdrop-blur-[3px]"
+        onClick={onClose}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="quick-slides-theme-title"
+          className="glass-panel glass-panel-dialog flex w-full max-w-[380px] flex-col overflow-visible rounded-xl border shadow-lg"
+          onClick={(event) => event.stopPropagation()}
         >
-          <span
-            className="relative block size-3.5 shrink-0 overflow-hidden rounded border border-gray-300/80 dark:border-gray-600"
-            style={{ backgroundColor: activeSwatchBackground }}
-            aria-hidden
-          >
-            {activeTheme.iconUrl ? (
-              <img
-                src={activeTheme.iconUrl}
-                alt=""
-                className="absolute inset-0 size-full object-contain p-px"
-              />
-            ) : null}
-          </span>
-          <span className="truncate">{activeTheme.name[language]}</span>
-        </span>
+          <div className="glass-divider relative z-[1] flex shrink-0 items-center justify-between border-b px-5 py-3.5">
+            <h2 id="quick-slides-theme-title" className="text-base font-semibold">
+              {t.dialogTitle}
+            </h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              onClick={onClose}
+              aria-label={t.close}
+              title={t.close}
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+
+          <div className="relative z-[1] space-y-5 px-5 py-4">
+            <div className="space-y-2.5">
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="text-xs font-semibold tracking-wide text-muted-foreground">
+                  {t.style}
+                </p>
+                <p className="truncate text-xs font-medium text-foreground">
+                  {selectedName}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 overflow-visible pt-1">
+                {SLIDE_THEMES.map((theme) => (
+                  <ThemeSwatch
+                    key={theme.id}
+                    selected={value === theme.id}
+                    swatch={theme.swatch}
+                    iconSwatch={theme.iconSwatch}
+                    iconUrl={theme.iconUrl}
+                    label={theme.name[language]}
+                    onClick={() => onChange(theme.id)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              <p className="text-xs font-semibold tracking-wide text-muted-foreground">
+                {t.color}
+              </p>
+              <div
+                role="radiogroup"
+                aria-label={t.color}
+                className="glass-seg-track relative grid h-10 w-full grid-cols-2 gap-1"
+              >
+                <div
+                  aria-hidden
+                  className="glass-seg-active pointer-events-none absolute top-[var(--glass-seg-pad)] bottom-[var(--glass-seg-pad)] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                  style={{
+                    left: `calc(${(colorMode === "dark" ? 1 : 0) * 50}% + var(--glass-seg-pad))`,
+                    width: "calc(50% - (2 * var(--glass-seg-pad)))",
+                  }}
+                />
+                {colorModes.map(({ id, label, icon: Icon }) => {
+                  const active = colorMode === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => onColorModeChange(id)}
+                      className="relative z-[1] inline-flex items-center justify-center gap-1.5 px-2 text-xs font-medium text-muted-foreground"
+                    >
+                      <Icon className="size-3.5" aria-hidden />
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="flex min-h-10 flex-wrap items-center gap-3 overflow-visible py-0.5">
-        {SLIDE_THEMES.map((theme) => (
-          <ThemeSwatch
-            key={theme.id}
-            selected={value === theme.id}
-            swatch={theme.swatch}
-            iconSwatch={theme.iconSwatch}
-            iconUrl={theme.iconUrl}
-            label={theme.name[language]}
-            onClick={() => onChange(theme.id)}
-          />
-        ))}
-      </div>
-    </div>
+    </DialogPortal>
+  );
+}
+
+export function StyleSelector({
+  value,
+  colorMode,
+  onChange,
+  onColorModeChange,
+}: StyleSelectorProps) {
+  const language = useLanguage();
+  const t = copy[language];
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="glass-toolbar-action inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-foreground"
+      >
+        <Palette className="size-3.5" aria-hidden />
+        {t.theme}
+      </button>
+      <ThemeDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        value={value}
+        colorMode={colorMode}
+        onChange={onChange}
+        onColorModeChange={onColorModeChange}
+      />
+    </>
   );
 }

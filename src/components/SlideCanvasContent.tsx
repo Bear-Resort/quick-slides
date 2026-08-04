@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { ThemeStickerSlideDecoration } from "@/components/ThemeStickerSlideDecoration";
 import type { SlideLayoutType } from "@/lib/slideLayout";
 import type { SlideThemeId } from "@/lib/slideThemes";
@@ -22,11 +22,9 @@ export function SlideCanvasContent({
   className,
   style,
 }: SlideCanvasContentProps) {
-  const contentRef = useRef<HTMLDivElement>(null);
-
   return (
     <div
-      className={cn("slide-canvas relative overflow-hidden bg-card", className)}
+      className={cn("slide-canvas relative overflow-hidden", className)}
       style={style}
     >
       {isStickerSlideTheme(theme) ? (
@@ -34,12 +32,9 @@ export function SlideCanvasContent({
           themeId={theme}
           slideIndex={slideIndex}
           layout={layout}
-          contentRef={contentRef}
         />
       ) : null}
-      <div ref={contentRef} className="relative z-[2] h-full w-full">
-        {children}
-      </div>
+      <div className="relative z-[2] h-full w-full">{children}</div>
     </div>
   );
 }
