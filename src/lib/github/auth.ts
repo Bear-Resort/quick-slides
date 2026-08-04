@@ -171,7 +171,7 @@ export async function githubDeviceStart(): Promise<GithubDeviceStart> {
     const text = await response.text();
     if (response.status === 405) {
       throw new Error(
-        "GitHub Device Flow proxy is unavailable here (405). Use npm run dev locally, or paste a personal access token below. On the live site, Device Flow needs an OAuth proxy.",
+        "GitHub Device Flow proxy is unavailable here (405). Use npm run dev locally, set VITE_GITHUB_OAUTH_PROXY to your Convex URL, or paste a personal access token below.",
       );
     }
     throw new Error(
