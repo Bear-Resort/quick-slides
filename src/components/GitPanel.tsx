@@ -14,6 +14,7 @@ import {
   githubDevicePoll,
   githubDeviceStart,
   refreshAuthStatus,
+  signInWithAccessToken,
   signOut,
   type GithubAuthStatus,
 } from "@/lib/github/auth";
@@ -48,6 +49,10 @@ const copy = {
     githubTitle: "GitHub",
     gitTitle: "Git",
     signIn: "Sign in with GitHub",
+    signInToken: "Use access token",
+    tokenPlaceholder: "ghp_… or github_pat_…",
+    tokenHelp: "Create a classic token with repo scope, or a fine-grained token with Contents read/write.",
+    tokenSubmit: "Save token",
     signOut: "Sign out",
     waiting: "Waiting for authorization…",
     openGithub: "Open GitHub",
@@ -80,6 +85,10 @@ const copy = {
     githubTitle: "GitHub",
     gitTitle: "Git",
     signIn: "使用 GitHub 登录",
+    signInToken: "使用访问令牌",
+    tokenPlaceholder: "ghp_… 或 github_pat_…",
+    tokenHelp: "创建带 repo 权限的经典令牌，或带 Contents 读写的细粒度令牌。",
+    tokenSubmit: "保存令牌",
     signOut: "退出登录",
     waiting: "等待授权…",
     openGithub: "打开 GitHub",
@@ -145,6 +154,8 @@ export function GitPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [tokenDraft, setTokenDraft] = useState("");
+  const [showTokenForm, setShowTokenForm] = useState(false);
 
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollCancelledRef = useRef(false);
@@ -259,6 +270,23 @@ export function GitPanel({
     }
   };
 
+  const handleTokenSignIn = async () => {
+    setBusy(true);
+    setError(null);
+    setInfo(null);
+    try {
+      const next = await signInWithAccessToken(tokenDraft);
+      setAuth(next);
+      setTokenDraft("");
+      setShowTokenForm(false);
+      await loadRepos();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleSignOut = () => {
     clearPoll();
     signOut();
@@ -365,15 +393,46 @@ export function GitPanel({
         {isGithub ? (
           <>
             {!auth.signedIn && !userCode ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void startDeviceFlow()}
-                className="glass-primary inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
-              >
-                <Github className="size-4" aria-hidden />
-                {t.signIn}
-              </button>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void startDeviceFlow()}
+                  className="glass-primary inline-flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                >
+                  <Github className="size-4" aria-hidden />
+                  {t.signIn}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setShowTokenForm((open) => !open)}
+                  className="glass-toolbar-action inline-flex w-full items-center justify-center rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                >
+                  {t.signInToken}
+                </button>
+                {showTokenForm ? (
+                  <div className="space-y-2 rounded-lg border border-white/10 p-3">
+                    <p className="text-[11px] text-muted-foreground">{t.tokenHelp}</p>
+                    <input
+                      type="password"
+                      value={tokenDraft}
+                      onChange={(event) => setTokenDraft(event.target.value)}
+                      placeholder={t.tokenPlaceholder}
+                      className="w-full rounded-md border border-white/15 bg-transparent px-2.5 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      autoComplete="off"
+                    />
+                    <button
+                      type="button"
+                      disabled={busy || !tokenDraft.trim()}
+                      onClick={() => void handleTokenSignIn()}
+                      className="glass-primary inline-flex w-full items-center justify-center rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+                    >
+                      {t.tokenSubmit}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             ) : null}
 
             {userCode ? (

@@ -1,9 +1,19 @@
 const TOKEN_KEY = "quick-slides.github.token";
 const PROFILE_KEY = "quick-slides.github.profile";
 
-const OAUTH_BASE = "/github-oauth";
 const OAUTH_SCOPES = "repo";
 const USER_AGENT = "Quick-Slides";
+
+/** Dev Vite middleware path, or absolute proxy URL from env for production. */
+function oauthBase(): string {
+  const configured = (import.meta.env.VITE_GITHUB_OAUTH_PROXY as string | undefined)?.trim();
+  if (configured) return configured.replace(/\/$/, "");
+  return "/github-oauth";
+}
+
+function oauthUrl(path: string): string {
+  return `${oauthBase()}${path.startsWith("/") ? path : `/${path}`}`;
+}
 
 export type GithubAuthStatus = {
   signedIn: boolean;
@@ -149,7 +159,7 @@ export async function githubDeviceStart(): Promise<GithubDeviceStart> {
     client_id: clientId(),
     scope: OAUTH_SCOPES,
   });
-  const response = await fetch(`${OAUTH_BASE}/login/device/code`, {
+  const response = await fetch(oauthUrl("/login/device/code"), {
     method: "POST",
     headers: {
       Accept: "application/json",
@@ -159,7 +169,14 @@ export async function githubDeviceStart(): Promise<GithubDeviceStart> {
   });
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Device login failed (${response.status}): ${text || response.statusText}`);
+    if (response.status === 405) {
+      throw new Error(
+        "GitHub Device Flow proxy is unavailable here (405). Use npm run dev locally, or paste a personal access token below. On the live site, Device Flow needs an OAuth proxy.",
+      );
+    }
+    throw new Error(
+      `Device login failed (${response.status}): ${text.slice(0, 200) || response.statusText}`,
+    );
   }
   const data = (await response.json()) as {
     user_code: string;
@@ -190,7 +207,7 @@ export async function githubDevicePoll(
     device_code: deviceCode,
     grant_type: "urn:ietf:params:oauth:grant-type:device_code",
   });
-  const response = await fetch(`${OAUTH_BASE}/login/oauth/access_token`, {
+  const response = await fetch(oauthUrl("/login/oauth/access_token"), {
     method: "POST",
     headers: {
       Accept: "application/json",
@@ -243,4 +260,20 @@ export async function githubDevicePoll(
         message: data.error_description || data.error || "Unknown error",
       };
   }
+}
+
+/** Sign in with a classic or fine-grained PAT (repo scope). Useful when Device Flow proxy is unavailable. */
+export async function signInWithAccessToken(token: string): Promise<GithubAuthStatus> {
+  const trimmed = token.trim();
+  if (!trimmed) throw new Error("Token is empty");
+  const profile = await fetchUserProfile(trimmed);
+  setAccessToken(trimmed);
+  writeProfile(profile);
+  return {
+    signedIn: true,
+    login: profile.login,
+    name: profile.name,
+    avatarUrl: profile.avatarUrl,
+    scopes: profile.scopes,
+  };
 }
