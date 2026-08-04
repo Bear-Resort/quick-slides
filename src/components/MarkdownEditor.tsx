@@ -449,13 +449,18 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
               return (
                 <div
                   key={separator.line}
-                  className="pointer-events-auto absolute right-6 flex items-center gap-1.5"
+                  className="group/locate pointer-events-auto absolute right-6 flex items-center gap-1.5"
                   style={{
                     top: position.top,
                     height: position.height,
                   }}
                 >
-                  <span className="rounded-md border border-border/70 bg-background/95 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground shadow-sm backdrop-blur-sm">
+                  <span
+                    className={cn(
+                      "rounded-md border border-border/70 bg-background/95 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground shadow-sm backdrop-blur-sm",
+                      "pointer-events-none opacity-0 transition-opacity group-hover/locate:opacity-100 group-focus-within/locate:opacity-100",
+                    )}
+                  >
                     {t.page(separator.page, separator.total)}
                   </span>
                   <LocateIconButton
@@ -465,6 +470,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => handleLocateSlide(separator.line)}
                     icon={<Locate className="size-3" />}
+                    showTooltip={false}
                   />
                 </div>
               );
