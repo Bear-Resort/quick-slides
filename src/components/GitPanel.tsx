@@ -8,7 +8,7 @@ import {
   Search,
 } from "lucide-react";
 import { WorkspacePanel } from "@/components/WorkspacePanel";
-import { createRepo, listRepos, type GithubRepo } from "@/lib/github/api";
+import { createRepo, getOrCreateSharedLibraryRepo, listRepos, SHARED_LIBRARY_REPO_NAME, type GithubRepo } from "@/lib/github/api";
 import {
   getAuthStatus,
   githubDevicePoll,
@@ -20,14 +20,21 @@ import {
 } from "@/lib/github/auth";
 import {
   clearDeckGithubLink,
+  formatDeckGithubLinkLabel,
   getDeckGithubLink,
-  linkFromRepo,
+  isSharedLibraryRepo,
+  linkForDeckRepo,
   pullDeckFromGithub,
   pushDeckToGithub,
   setDeckGithubLink,
   type DeckGithubLink,
   type PulledDeck,
 } from "@/lib/github/deckSync";
+import {
+  createDeck,
+  ensureBrowserLibraryRoot,
+} from "@/lib/library/deckStorage";
+import { getDefaultPresentationFilename } from "@/lib/presentationFilename";
 import { useLanguage } from "@/lib/useLanguage";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +49,8 @@ type GitPanelProps = {
   deckTitle?: string;
   onOpenGithub?: () => void;
   onPulled?: (deck: PulledDeck) => void;
+  /** Called after a repo is linked to a newly created (or existing) presentation. */
+  onDeckLinked?: (deckId: string) => void;
 };
 
 const copy = {
@@ -51,7 +60,8 @@ const copy = {
     signIn: "Sign in with GitHub",
     signInToken: "Use access token",
     tokenPlaceholder: "ghp_… or github_pat_…",
-    tokenHelp: "Create a classic token with repo scope, or a fine-grained token with Contents read/write.",
+    tokenHelp:
+      "Create a classic token with repo scope, or a fine-grained token with Contents read/write.",
     tokenSubmit: "Save token",
     signOut: "Sign out",
     waiting: "Waiting for authorization…",
@@ -61,10 +71,23 @@ const copy = {
     repos: "Your repositories",
     search: "Search repositories…",
     link: "Link",
+    openRepo: "Open",
     linked: "Linked",
-    createRepo: "Create repo & link",
+    createOptions: "Create repository",
+    createCustom: "Custom repository",
+    createCustomHint: "One presentation per repository. Choose a name and visibility.",
+    createLibrary: "Shared library",
+    createLibraryHint: `Use a private “${SHARED_LIBRARY_REPO_NAME}” repo for all slides (one folder each).`,
+    createLibraryAction: `Use ${SHARED_LIBRARY_REPO_NAME}`,
+    repoName: "Repository name",
+    visibility: "Visibility",
+    visibilityPrivate: "Private",
+    visibilityPublic: "Public",
+    createCustomAction: "Create & link",
     unlink: "Unlink",
-    noDeck: "Open a saved presentation to link a repository.",
+    chooseRepo:
+      "Choose a repository to open as a presentation, or create a new one.",
+    noDeck: "Open a saved presentation to push or pull.",
     notSignedIn: "Sign in to GitHub first.",
     openGithubCta: "Open GitHub",
     notLinked: "Link a GitHub repository for this presentation.",
@@ -79,7 +102,10 @@ const copy = {
     pulling: "Pulling…",
     pushOk: "Pushed to GitHub.",
     pullOk: "Pulled from GitHub.",
-    noClientId: "Set VITE_GITHUB_CLIENT_ID in .env.local to enable GitHub sign-in.",
+    noClientId:
+      "Set VITE_GITHUB_CLIENT_ID in .env.local to enable GitHub sign-in.",
+    createDeckFailed: "Could not create a local presentation for this repository.",
+    emptyRepos: "No repositories found.",
   },
   zh: {
     githubTitle: "GitHub",
@@ -97,10 +123,22 @@ const copy = {
     repos: "你的仓库",
     search: "搜索仓库…",
     link: "关联",
+    openRepo: "打开",
     linked: "已关联",
-    createRepo: "创建仓库并关联",
+    createOptions: "创建仓库",
+    createCustom: "自定义仓库",
+    createCustomHint: "每个演示文稿一个仓库。可设置名称与公开/私有。",
+    createLibrary: "共享文库",
+    createLibraryHint: `使用私有 “${SHARED_LIBRARY_REPO_NAME}” 仓库存放全部幻灯片（每个演示一个文件夹）。`,
+    createLibraryAction: `使用 ${SHARED_LIBRARY_REPO_NAME}`,
+    repoName: "仓库名称",
+    visibility: "可见性",
+    visibilityPrivate: "私有",
+    visibilityPublic: "公开",
+    createCustomAction: "创建并关联",
     unlink: "取消关联",
-    noDeck: "请先打开已保存的演示文稿再关联仓库。",
+    chooseRepo: "选择一个仓库作为演示文稿打开，或创建新仓库。",
+    noDeck: "请先打开已保存的演示文稿再推送或拉取。",
     notSignedIn: "请先登录 GitHub。",
     openGithubCta: "打开 GitHub",
     notLinked: "为此演示文稿关联一个 GitHub 仓库。",
@@ -116,6 +154,8 @@ const copy = {
     pushOk: "已推送到 GitHub。",
     pullOk: "已从 GitHub 拉取。",
     noClientId: "请在 .env.local 中设置 VITE_GITHUB_CLIENT_ID 以启用 GitHub 登录。",
+    createDeckFailed: "无法为此仓库创建本地演示文稿。",
+    emptyRepos: "未找到仓库。",
   },
 } as const;
 
@@ -138,6 +178,7 @@ export function GitPanel({
   deckTitle,
   onOpenGithub,
   onPulled,
+  onDeckLinked,
 }: GitPanelProps) {
   const language = useLanguage();
   const t = copy[language];
@@ -156,6 +197,8 @@ export function GitPanel({
   const [info, setInfo] = useState<string | null>(null);
   const [tokenDraft, setTokenDraft] = useState("");
   const [showTokenForm, setShowTokenForm] = useState(false);
+  const [newRepoName, setNewRepoName] = useState("");
+  const [newRepoPrivate, setNewRepoPrivate] = useState(true);
 
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollCancelledRef = useRef(false);
@@ -197,6 +240,7 @@ export function GitPanel({
     setInfo(null);
     setAuth(getAuthStatus());
     setLink(deckId ? getDeckGithubLink(deckId) : null);
+    setNewRepoName(defaultRepoName(deckTitle));
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
@@ -210,7 +254,17 @@ export function GitPanel({
       document.removeEventListener("keydown", onKeyDown);
       clearPoll();
     };
-  }, [open, onClose, clearPoll, deckId, isGithub, loadRepos]);
+  }, [open, onClose, clearPoll, deckId, deckTitle, isGithub, loadRepos]);
+
+  const ensureDeckForLink = async (preferredTitle?: string): Promise<string> => {
+    if (deckId) return deckId;
+    const root = await ensureBrowserLibraryRoot();
+    if (!root) throw new Error(t.createDeckFailed);
+    const title =
+      preferredTitle?.trim() || getDefaultPresentationFilename(language);
+    const deck = await createDeck(root, title, language);
+    return deck.folderName;
+  };
 
   const startDeviceFlow = async () => {
     clearPoll();
@@ -263,9 +317,7 @@ export function GitPanel({
       }, intervalMs);
     } catch (err) {
       const text = err instanceof Error ? err.message : String(err);
-      setError(
-        text.includes("VITE_GITHUB_CLIENT_ID") ? t.noClientId : text,
-      );
+      setError(text.includes("VITE_GITHUB_CLIENT_ID") ? t.noClientId : text);
       setBusy(false);
     }
   };
@@ -297,12 +349,25 @@ export function GitPanel({
     setDeviceStatus(null);
   };
 
-  const handleLink = (repo: GithubRepo) => {
-    if (!deckId) return;
-    const next = linkFromRepo(repo);
-    setDeckGithubLink(deckId, next);
-    setLink(next);
-    setInfo(`${t.linked}: ${next.fullName}`);
+  const handleLink = async (repo: GithubRepo) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const id = await ensureDeckForLink(
+        isSharedLibraryRepo(repo)
+          ? deckTitle || getDefaultPresentationFilename(language)
+          : repo.name,
+      );
+      const next = linkForDeckRepo(repo, id);
+      setDeckGithubLink(id, next);
+      setLink(next);
+      setInfo(`${t.linked}: ${formatDeckGithubLinkLabel(next)}`);
+      onDeckLinked?.(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleUnlink = () => {
@@ -311,18 +376,51 @@ export function GitPanel({
     setLink(null);
   };
 
-  const handleCreateAndLink = async () => {
-    if (!deckId) return;
+  const handleCreateCustomRepo = async () => {
     setBusy(true);
     setError(null);
     try {
+      const name = newRepoName.trim() || defaultRepoName(deckTitle);
+      if (name === SHARED_LIBRARY_REPO_NAME) {
+        throw new Error(
+          `Use “${t.createLibrary}” for the shared ${SHARED_LIBRARY_REPO_NAME} repository.`,
+        );
+      }
+      const id = await ensureDeckForLink(name);
       const repo = await createRepo({
-        name: defaultRepoName(deckTitle),
-        privateRepo: true,
-        description: deckTitle ? `Quick Slides: ${deckTitle}` : undefined,
+        name,
+        privateRepo: newRepoPrivate,
+        description: deckTitle
+          ? `Quick Slides: ${deckTitle}`
+          : `Quick Slides: ${name}`,
       });
-      handleLink(repo);
+      const next = linkForDeckRepo(repo, id);
+      setDeckGithubLink(id, next);
+      setLink(next);
+      setInfo(`${t.linked}: ${formatDeckGithubLinkLabel(next)}`);
       await loadRepos();
+      onDeckLinked?.(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleUseSharedLibrary = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const id = await ensureDeckForLink(
+        deckTitle || getDefaultPresentationFilename(language),
+      );
+      const repo = await getOrCreateSharedLibraryRepo();
+      const next = linkForDeckRepo(repo, id);
+      setDeckGithubLink(id, next);
+      setLink(next);
+      setInfo(`${t.linked}: ${formatDeckGithubLinkLabel(next)}`);
+      await loadRepos();
+      onDeckLinked?.(id);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -406,14 +504,16 @@ export function GitPanel({
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => setShowTokenForm((open) => !open)}
+                  onClick={() => setShowTokenForm((openForm) => !openForm)}
                   className="glass-toolbar-action inline-flex w-full items-center justify-center rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold disabled:opacity-50"
                 >
                   {t.signInToken}
                 </button>
                 {showTokenForm ? (
                   <div className="space-y-2 rounded-lg border border-white/10 p-3">
-                    <p className="text-[11px] text-muted-foreground">{t.tokenHelp}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {t.tokenHelp}
+                    </p>
                     <input
                       type="password"
                       value={tokenDraft}
@@ -493,88 +593,165 @@ export function GitPanel({
                   </button>
                 </div>
 
-                {!deckId ? (
-                  <p className="text-xs text-muted-foreground">{t.noDeck}</p>
+                {deckId && link ? (
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs">
+                    <span className="min-w-0 truncate font-medium">
+                      {t.linked}: {formatDeckGithubLinkLabel(link)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleUnlink}
+                      className="shrink-0 text-muted-foreground underline"
+                    >
+                      {t.unlink}
+                    </button>
+                  </div>
                 ) : (
-                  <>
-                    {link ? (
-                      <div className="flex items-center justify-between gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs">
-                        <span className="min-w-0 truncate font-medium">
-                          {t.linked}: {link.fullName}
-                        </span>
+                  <p className="text-xs text-muted-foreground">{t.chooseRepo}</p>
+                )}
+
+                <div className="space-y-2 rounded-lg border border-white/10 p-3">
+                  <p className="text-xs font-semibold tracking-wide text-muted-foreground">
+                    {t.createOptions}
+                  </p>
+
+                  <div className="space-y-2 rounded-md border border-white/10 p-2.5">
+                    <p className="text-xs font-semibold">{t.createCustom}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {t.createCustomHint}
+                    </p>
+                    <label className="block space-y-1">
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        {t.repoName}
+                      </span>
+                      <input
+                        value={newRepoName}
+                        onChange={(event) => setNewRepoName(event.target.value)}
+                        placeholder={defaultRepoName(deckTitle)}
+                        className="w-full rounded-md border border-white/15 bg-transparent px-2.5 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                    </label>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        {t.visibility}
+                      </span>
+                      <div className="grid grid-cols-2 gap-1">
                         <button
                           type="button"
-                          onClick={handleUnlink}
-                          className="shrink-0 text-muted-foreground underline"
+                          onClick={() => setNewRepoPrivate(true)}
+                          className={cn(
+                            "rounded-md border px-2 py-1.5 text-xs font-semibold",
+                            newRepoPrivate
+                              ? "border-white/30 bg-white/12"
+                              : "border-white/10 text-muted-foreground",
+                          )}
                         >
-                          {t.unlink}
+                          {t.visibilityPrivate}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewRepoPrivate(false)}
+                          className={cn(
+                            "rounded-md border px-2 py-1.5 text-xs font-semibold",
+                            !newRepoPrivate
+                              ? "border-white/30 bg-white/12"
+                              : "border-white/10 text-muted-foreground",
+                          )}
+                        >
+                          {t.visibilityPublic}
                         </button>
                       </div>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void handleCreateAndLink()}
-                        className="glass-toolbar-action rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold disabled:opacity-50"
-                      >
-                        {t.createRepo}
-                      </button>
-                    )}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={busy || !newRepoName.trim()}
+                      onClick={() => void handleCreateCustomRepo()}
+                      className="glass-toolbar-action w-full rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+                    >
+                      {t.createCustomAction}
+                    </button>
+                  </div>
 
-                    <p className="text-xs font-semibold tracking-wide text-muted-foreground">
-                      {t.repos}
+                  <div className="space-y-2 rounded-md border border-white/10 p-2.5">
+                    <p className="text-xs font-semibold">{t.createLibrary}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {t.createLibraryHint}
                     </p>
-                    <div className="relative shrink-0">
-                      <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                      <input
-                        value={repoQuery}
-                        onChange={(event) => setRepoQuery(event.target.value)}
-                        placeholder={t.search}
-                        className="w-full rounded-md border border-white/15 bg-transparent py-1.5 pl-8 pr-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      />
-                    </div>
-                    <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-white/10">
-                      <ul className="divide-y divide-white/10">
-                        {filteredRepos.map((repo) => {
-                          const isLinked =
-                            link?.fullName === repo.fullName ||
-                            (link?.owner === repo.ownerLogin &&
-                              link?.repo === repo.name);
-                          return (
-                            <li
-                              key={repo.fullName}
-                              className="flex items-center justify-between gap-2 px-3 py-2"
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void handleUseSharedLibrary()}
+                      className="glass-primary w-full rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+                    >
+                      {t.createLibraryAction}
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-xs font-semibold tracking-wide text-muted-foreground">
+                  {t.repos}
+                </p>
+                <div className="relative shrink-0">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={repoQuery}
+                    onChange={(event) => setRepoQuery(event.target.value)}
+                    placeholder={t.search}
+                    className="w-full rounded-md border border-white/15 bg-transparent py-1.5 pl-8 pr-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-white/10">
+                  {filteredRepos.length === 0 ? (
+                    <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+                      {busy ? "…" : t.emptyRepos}
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-white/10">
+                      {filteredRepos.map((repo) => {
+                        const linkedHere =
+                          Boolean(deckId) &&
+                          link?.owner === repo.ownerLogin &&
+                          link.repo === repo.name &&
+                          (isSharedLibraryRepo(repo)
+                            ? link.pathPrefix === deckId
+                            : !link.pathPrefix);
+                        return (
+                          <li
+                            key={repo.fullName}
+                            className="flex items-center justify-between gap-2 px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">
+                                {repo.fullName}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground">
+                                {repo.private ? "private" : "public"}
+                                {isSharedLibraryRepo(repo) ? " · library" : ""}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={busy || linkedHere}
+                              onClick={() => void handleLink(repo)}
+                              className={cn(
+                                "shrink-0 rounded-md border border-white/15 px-2 py-1 text-[11px] font-semibold",
+                                linkedHere
+                                  ? "opacity-60"
+                                  : "glass-toolbar-action",
+                              )}
                             >
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-medium">
-                                  {repo.fullName}
-                                </p>
-                                {repo.private ? (
-                                  <p className="text-[10px] text-muted-foreground">
-                                    private
-                                  </p>
-                                ) : null}
-                              </div>
-                              <button
-                                type="button"
-                                disabled={busy || isLinked}
-                                onClick={() => handleLink(repo)}
-                                className={cn(
-                                  "shrink-0 rounded-md border border-white/15 px-2 py-1 text-[11px] font-semibold",
-                                  isLinked
-                                    ? "opacity-60"
-                                    : "glass-toolbar-action",
-                                )}
-                              >
-                                {isLinked ? t.linked : t.link}
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  </>
-                )}
+                              {linkedHere
+                                ? t.linked
+                                : deckId
+                                  ? t.link
+                                  : t.openRepo}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
               </>
             ) : null}
           </>

@@ -119,15 +119,47 @@ export async function createRepo(options: {
   return mapRepo((await response.json()) as Parameters<typeof mapRepo>[0]);
 }
 
+export async function getAuthenticatedLogin(): Promise<string> {
+  const response = await githubFetch("/user");
+  if (!response.ok) throw new Error(await parseError(response));
+  const data = (await response.json()) as { login?: string };
+  if (!data.login) throw new Error("Could not read GitHub username");
+  return data.login;
+}
+
+export async function tryGetRepo(
+  owner: string,
+  repo: string,
+): Promise<GithubRepo | null> {
+  const response = await githubFetch(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+  );
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(await parseError(response));
+  return mapRepo((await response.json()) as Parameters<typeof mapRepo>[0]);
+}
+
+/** Private monorepo for all Quick Slides decks (one folder per presentation). */
+export const SHARED_LIBRARY_REPO_NAME = "quick-slide";
+
+export async function getOrCreateSharedLibraryRepo(): Promise<GithubRepo> {
+  const login = await getAuthenticatedLogin();
+  const existing = await tryGetRepo(login, SHARED_LIBRARY_REPO_NAME);
+  if (existing) return existing;
+  return createRepo({
+    name: SHARED_LIBRARY_REPO_NAME,
+    privateRepo: true,
+    description: "Quick Slides library — all presentations in one private repository",
+  });
+}
+
 export async function getRepo(
   owner: string,
   repo: string,
 ): Promise<GithubRepo> {
-  const response = await githubFetch(
-    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
-  );
-  if (!response.ok) throw new Error(await parseError(response));
-  return mapRepo((await response.json()) as Parameters<typeof mapRepo>[0]);
+  const found = await tryGetRepo(owner, repo);
+  if (!found) throw new Error("Repository not found");
+  return found;
 }
 
 export async function getFileContent(

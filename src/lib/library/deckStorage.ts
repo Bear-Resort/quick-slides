@@ -10,6 +10,7 @@ import {
   type LibraryIndexEntry,
 } from "@/lib/library/deckFormat";
 import {
+  createAutoDefaultLibraryRoot,
   ensureReadWritePermission,
   ensureSubdirectory,
   listSubdirectoryNames,
@@ -28,6 +29,7 @@ import {
   upsertLibraryIndexEntry,
 } from "@/lib/library/handleStore";
 import {
+  getLibraryPreference,
   type LibraryPreference,
   setLibraryPreference,
 } from "@/lib/library/libraryPreference";
@@ -46,9 +48,11 @@ export async function connectLibraryRoot(
   handle: FileSystemDirectoryHandle,
   preference: LibraryPreference = "default",
 ): Promise<boolean> {
-  const granted = await ensureReadWritePermission(handle);
-  if (!granted) return false;
   registerLibraryRootPath(handle);
+  if (preference !== "default") {
+    const granted = await ensureReadWritePermission(handle);
+    if (!granted) return false;
+  }
   await saveLibraryRootHandle(handle);
   setLibraryPreference(preference);
   return true;
@@ -57,10 +61,20 @@ export async function connectLibraryRoot(
 export async function getLibraryRoot(): Promise<FileSystemDirectoryHandle | null> {
   const handle = await loadLibraryRootHandle();
   if (!handle) return null;
-  const granted = await ensureReadWritePermission(handle);
-  if (!granted) return null;
   registerLibraryRootPath(handle);
+  if (getLibraryPreference() === "custom") {
+    const granted = await ensureReadWritePermission(handle);
+    if (!granted) return null;
+  }
   return handle;
+}
+
+/** Always (re)bind the browser OPFS library root — does not need a permission prompt. */
+export async function ensureBrowserLibraryRoot(): Promise<FileSystemDirectoryHandle | null> {
+  const handle = await createAutoDefaultLibraryRoot();
+  if (!handle) return null;
+  const ok = await connectLibraryRoot(handle, "default");
+  return ok ? handle : null;
 }
 
 export async function getDeckDirectory(

@@ -24,6 +24,7 @@ import {
   getRepo,
   listDirectory,
   putFile,
+  SHARED_LIBRARY_REPO_NAME,
   type GithubRepo,
 } from "@/lib/github/api";
 
@@ -34,6 +35,11 @@ export type DeckGithubLink = {
   repo: string;
   branch: string;
   fullName: string;
+  /**
+   * When set, deck files live under this folder in the repo
+   * (used by the shared `quick-slide` library). Empty = repo root.
+   */
+  pathPrefix?: string;
 };
 
 type LinkMap = Record<string, DeckGithubLink>;
@@ -73,13 +79,42 @@ export function listDeckGithubLinks(): Array<{ deckId: string; link: DeckGithubL
   return Object.entries(readLinkMap()).map(([deckId, link]) => ({ deckId, link }));
 }
 
-export function linkFromRepo(repo: GithubRepo, branch?: string): DeckGithubLink {
+export function formatDeckGithubLinkLabel(link: DeckGithubLink): string {
+  const prefix = link.pathPrefix?.trim();
+  return prefix ? `${link.fullName}/${prefix}` : link.fullName;
+}
+
+export function isSharedLibraryRepo(repo: Pick<GithubRepo, "name"> | DeckGithubLink): boolean {
+  const name = "name" in repo ? repo.name : repo.repo;
+  return name === SHARED_LIBRARY_REPO_NAME;
+}
+
+export function linkFromRepo(
+  repo: GithubRepo,
+  options?: { branch?: string; pathPrefix?: string },
+): DeckGithubLink {
+  const pathPrefix = options?.pathPrefix?.trim() || undefined;
   return {
     owner: repo.ownerLogin,
     repo: repo.name,
-    branch: branch ?? repo.defaultBranch,
+    branch: options?.branch ?? repo.defaultBranch,
     fullName: repo.fullName,
+    ...(pathPrefix ? { pathPrefix } : {}),
   };
+}
+
+/** Dedicated repo = files at root; shared `quick-slide` = files under deck folder. */
+export function linkForDeckRepo(repo: GithubRepo, deckId: string): DeckGithubLink {
+  if (isSharedLibraryRepo(repo)) {
+    return linkFromRepo(repo, { pathPrefix: deckId });
+  }
+  return linkFromRepo(repo);
+}
+
+function remotePath(link: DeckGithubLink, relative: string): string {
+  const prefix = link.pathPrefix?.trim();
+  if (!prefix) return relative;
+  return `${prefix.replace(/\/+$/, "")}/${relative}`;
 }
 
 async function listLocalImageNames(
@@ -118,7 +153,8 @@ export async function pushDeckToGithub(options: {
 
   const commits: string[] = [];
 
-  const upsertText = async (path: string, text: string) => {
+  const upsertText = async (relativePath: string, text: string) => {
+    const path = remotePath(link, relativePath);
     const existing = await getFileContent(link.owner, link.repo, path, link.branch);
     await putFile({
       owner: link.owner,
@@ -139,7 +175,7 @@ export async function pushDeckToGithub(options: {
   const remoteImages = await listDirectory(
     link.owner,
     link.repo,
-    DECK_IMAGES_DIR,
+    remotePath(link, DECK_IMAGES_DIR),
     link.branch,
   );
   const remoteByName = new Map(
@@ -151,7 +187,7 @@ export async function pushDeckToGithub(options: {
     const blob = await readFileBlob(imagesDir, name);
     if (!blob) continue;
     const buffer = await blob.arrayBuffer();
-    const path = `${DECK_IMAGES_DIR}/${name}`;
+    const path = remotePath(link, `${DECK_IMAGES_DIR}/${name}`);
     const existing = remoteByName.get(name);
     await putFile({
       owner: link.owner,
@@ -196,7 +232,7 @@ export async function pullDeckFromGithub(options: {
   const mdFile = await getFileContent(
     link.owner,
     link.repo,
-    DECK_MARKDOWN_FILE,
+    remotePath(link, DECK_MARKDOWN_FILE),
     link.branch,
   );
   if (!mdFile?.content) {
@@ -207,7 +243,7 @@ export async function pullDeckFromGithub(options: {
   const metaFile = await getFileContent(
     link.owner,
     link.repo,
-    DECK_META_FILE,
+    remotePath(link, DECK_META_FILE),
     link.branch,
   );
   let metadata: DeckMetadata;
@@ -226,7 +262,7 @@ export async function pullDeckFromGithub(options: {
   const remoteImages = await listDirectory(
     link.owner,
     link.repo,
-    DECK_IMAGES_DIR,
+    remotePath(link, DECK_IMAGES_DIR),
     link.branch,
   );
   const remoteNames = new Set<string>();

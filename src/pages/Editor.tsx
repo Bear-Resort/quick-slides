@@ -408,6 +408,12 @@ export function Editor() {
           deckTitle={presentationFilename}
           onOpenGithub={() => setWorkspacePanel("github")}
           onPulled={(pulled) => void handlePulled(pulled)}
+          onDeckLinked={(linkedDeckId) => {
+            setWorkspacePanel(null);
+            if (linkedDeckId !== deckId) {
+              navigate(`/edit/${linkedDeckId}`);
+            }
+          }}
         />
         <main className="home-split-layout grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-2 overflow-hidden p-2 pt-2 sm:grid-cols-2 sm:grid-rows-[minmax(0,1fr)]">
           <section className="home-split-editor glass-panel flex min-h-0 min-w-0 flex-col overflow-hidden">

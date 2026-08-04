@@ -1,8 +1,7 @@
-import { connectLibraryRoot, getLibraryRoot } from "@/lib/library/deckStorage";
+import { ensureBrowserLibraryRoot, getLibraryRoot } from "@/lib/library/deckStorage";
 import { refreshLibraryIndex } from "@/lib/library/libraryIndex";
 import type { LibraryIndexEntry } from "@/lib/library/deckFormat";
 import { getLibraryPreference } from "@/lib/library/libraryPreference";
-import { createAutoDefaultLibraryRoot } from "@/lib/library/fsAccess";
 import { getLibraryDisplayPath } from "@/lib/library/libraryPaths";
 
 export type LibraryBootstrapResult = {
@@ -21,11 +20,10 @@ function resolveStorageMode(): "disk" | "browser" {
 export async function bootstrapLibrary(): Promise<LibraryBootstrapResult> {
   let root = await getLibraryRoot();
 
-  if (!root) {
-    const handle = await createAutoDefaultLibraryRoot();
-    if (handle) {
-      await connectLibraryRoot(handle, "default");
-      root = handle;
+  if (!root || getLibraryPreference() !== "custom") {
+    const browserRoot = await ensureBrowserLibraryRoot();
+    if (browserRoot) {
+      root = browserRoot;
     }
   }
 

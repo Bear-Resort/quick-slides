@@ -6,10 +6,10 @@ import type { LibraryIndexEntry } from "@/lib/library/deckFormat";
 import {
   connectLibraryRoot,
   createDeck,
+  ensureBrowserLibraryRoot,
   getLibraryRoot,
 } from "@/lib/library/deckStorage";
 import {
-  createAutoDefaultLibraryRoot,
   isDiskFolderPickerSupported,
   isLibrarySupported,
   pickCustomLibraryRoot,
@@ -127,7 +127,9 @@ export function FilesPanel({
       const links = listDeckGithubLinks().map(({ deckId, link }) => ({
         deckId,
         title: titleById.get(deckId) ?? deckId,
-        fullName: link.fullName,
+        fullName: link.pathPrefix
+          ? `${link.fullName}/${link.pathPrefix}`
+          : link.fullName,
       }));
       setGitEntries(links);
     } catch {
@@ -154,9 +156,10 @@ export function FilesPanel({
     setBusy(true);
     try {
       if (next === "browser") {
-        const handle = await createAutoDefaultLibraryRoot();
-        if (handle) {
-          await connectLibraryRoot(handle, "default");
+        const root = await ensureBrowserLibraryRoot();
+        if (!root) {
+          setError(t.loadFailed);
+          return;
         }
         await refresh();
       } else if (next === "disk") {
@@ -193,12 +196,17 @@ export function FilesPanel({
     setBusy(true);
     setError(null);
     try {
-      let root = await getLibraryRoot();
-      if (!root && source === "browser") {
-        const handle = await createAutoDefaultLibraryRoot();
-        if (handle) {
-          await connectLibraryRoot(handle, "default");
-          root = await getLibraryRoot();
+      let root: FileSystemDirectoryHandle | null = null;
+      if (source === "browser") {
+        root = await ensureBrowserLibraryRoot();
+      } else {
+        root = await getLibraryRoot();
+        if (!root && isDiskFolderPickerSupported()) {
+          const handle = await pickCustomLibraryRoot();
+          if (handle) {
+            const ok = await connectLibraryRoot(handle, "custom");
+            if (ok) root = handle;
+          }
         }
       }
       if (!root) {
@@ -212,8 +220,13 @@ export function FilesPanel({
       );
       onClose();
       navigate(`/edit/${deck.folderName}`);
-    } catch {
-      setError(t.createFailed);
+    } catch (err) {
+      console.error("createDeck failed", err);
+      setError(
+        err instanceof Error && err.message
+          ? `${t.createFailed} ${err.message}`
+          : t.createFailed,
+      );
     } finally {
       setBusy(false);
     }

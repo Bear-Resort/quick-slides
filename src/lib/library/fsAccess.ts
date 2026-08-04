@@ -113,20 +113,46 @@ export async function pickLibraryRoot(): Promise<FileSystemDirectoryHandle | nul
   return pickDefaultLibraryRoot();
 }
 
+/**
+ * Disk folder picks need readwrite permission; OPFS does not use that model.
+ * requestPermission also fails after an await (lost user activation), so we
+ * probe the handle when the permission API throws or denies without a prompt.
+ */
 export async function ensureReadWritePermission(
   handle: FileSystemDirectoryHandle,
 ): Promise<boolean> {
-  if (typeof handle.queryPermission !== "function") {
-    return true;
-  }
   const opts = { mode: "readwrite" as const };
-  if ((await handle.queryPermission(opts)) === "granted") {
+
+  if (typeof handle.queryPermission === "function") {
+    try {
+      const state = await handle.queryPermission(opts);
+      if (state === "granted") return true;
+    } catch {
+      // OPFS / engines without a permission model
+      return true;
+    }
+  } else {
     return true;
   }
-  if (typeof handle.requestPermission !== "function") {
-    return true;
+
+  if (typeof handle.requestPermission === "function") {
+    try {
+      if ((await handle.requestPermission(opts)) === "granted") {
+        return true;
+      }
+    } catch {
+      // Fall through to a probe — common when user activation was lost.
+    }
   }
-  return (await handle.requestPermission(opts)) === "granted";
+
+  try {
+    const probe = `.qs-perm-${crypto.randomUUID().slice(0, 8)}`;
+    await handle.getDirectoryHandle(probe, { create: true });
+    await handle.removeEntry(probe).catch(() => undefined);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function readTextFile(
@@ -142,24 +168,39 @@ export async function readTextFile(
   }
 }
 
+async function writeTextViaWorker(
+  dir: FileSystemDirectoryHandle,
+  fileName: string,
+  contents: string,
+): Promise<void> {
+  const dirPath = getHandlePath(dir);
+  if (!dirPath) {
+    throw new Error("Missing directory path for OPFS write");
+  }
+  await opfsWorkerWriteText([...dirPath, fileName], contents);
+}
+
 export async function writeTextFile(
   dir: FileSystemDirectoryHandle,
   fileName: string,
   contents: string,
 ): Promise<void> {
   if (needsOpfsWorkerWrites()) {
-    const dirPath = getHandlePath(dir);
-    if (!dirPath) {
-      throw new Error("Missing directory path for OPFS write");
-    }
-    await opfsWorkerWriteText([...dirPath, fileName], contents);
+    await writeTextViaWorker(dir, fileName, contents);
     return;
   }
 
-  const handle = await dir.getFileHandle(fileName, { create: true });
-  const writable = await handle.createWritable();
-  await writable.write(contents);
-  await writable.close();
+  try {
+    const handle = await dir.getFileHandle(fileName, { create: true });
+    const writable = await handle.createWritable();
+    await writable.write(contents);
+    await writable.close();
+  } catch (error) {
+    if (!isOriginPrivateFilesystemSupported() || !getHandlePath(dir)) {
+      throw error;
+    }
+    await writeTextViaWorker(dir, fileName, contents);
+  }
 }
 
 export async function readJsonFile<T>(
@@ -220,25 +261,40 @@ export async function listSubdirectoryNames(
   return names;
 }
 
+async function writeBinaryViaWorker(
+  dir: FileSystemDirectoryHandle,
+  fileName: string,
+  data: Blob | ArrayBuffer,
+): Promise<void> {
+  const dirPath = getHandlePath(dir);
+  if (!dirPath) {
+    throw new Error("Missing directory path for OPFS write");
+  }
+  const buffer = data instanceof ArrayBuffer ? data : await data.arrayBuffer();
+  await opfsWorkerWriteBinary([...dirPath, fileName], buffer);
+}
+
 export async function writeBinaryFile(
   dir: FileSystemDirectoryHandle,
   fileName: string,
   data: Blob | ArrayBuffer,
 ): Promise<void> {
   if (needsOpfsWorkerWrites()) {
-    const dirPath = getHandlePath(dir);
-    if (!dirPath) {
-      throw new Error("Missing directory path for OPFS write");
-    }
-    const buffer = data instanceof ArrayBuffer ? data : await data.arrayBuffer();
-    await opfsWorkerWriteBinary([...dirPath, fileName], buffer);
+    await writeBinaryViaWorker(dir, fileName, data);
     return;
   }
 
-  const handle = await dir.getFileHandle(fileName, { create: true });
-  const writable = await handle.createWritable();
-  await writable.write(data);
-  await writable.close();
+  try {
+    const handle = await dir.getFileHandle(fileName, { create: true });
+    const writable = await handle.createWritable();
+    await writable.write(data);
+    await writable.close();
+  } catch (error) {
+    if (!isOriginPrivateFilesystemSupported() || !getHandlePath(dir)) {
+      throw error;
+    }
+    await writeBinaryViaWorker(dir, fileName, data);
+  }
 }
 
 export async function readFileBlob(
