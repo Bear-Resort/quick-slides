@@ -271,6 +271,10 @@ async function renderMathToImage(
 
   const computed = getComputedStyle(mathEl);
   const isDisplay = isKatexDisplay(mathEl);
+  // Match the on-screen KaTeX box so rasterized equations keep the correct ratio.
+  const katexBox = mathEl.getBoundingClientRect();
+  const targetWidth = Math.max(katexBox.width, mathEl.offsetWidth, 1);
+  const targetHeight = Math.max(katexBox.height, mathEl.offsetHeight, 1);
 
   const mjNode = mathJax.tex2svg(source.tex, { display: source.displayMode });
   stripAssistiveMathml(mjNode);
@@ -285,7 +289,7 @@ async function renderMathToImage(
   if (isDisplay) {
     measureHost.style.display = "block";
     measureHost.style.textAlign = "center";
-    measureHost.style.width = "100%";
+    measureHost.style.width = `${targetWidth}px`;
   }
   measureHost.appendChild(mjNode);
   document.body.appendChild(measureHost);
@@ -294,13 +298,22 @@ async function renderMathToImage(
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   });
 
-  const width = Math.max(mjNode.offsetWidth, mjNode.scrollWidth, 1);
-  const height = Math.max(mjNode.offsetHeight, mjNode.scrollHeight, 1);
+  const mjWidth = Math.max(mjNode.offsetWidth, mjNode.scrollWidth, 1);
+  const mjHeight = Math.max(mjNode.offsetHeight, mjNode.scrollHeight, 1);
   measureHost.remove();
 
   const svg = mjNode.querySelector("svg");
   if (!(svg instanceof SVGElement)) {
     throw new Error("MathJax did not produce SVG output");
+  }
+
+  // Uniformly scale MathJax output to the on-screen KaTeX box (preserve aspect ratio).
+  let width = mjWidth;
+  let height = mjHeight;
+  if (targetWidth > 2 && targetHeight > 2) {
+    const scale = Math.min(targetWidth / mjWidth, targetHeight / mjHeight);
+    width = Math.max(1, mjWidth * scale);
+    height = Math.max(1, mjHeight * scale);
   }
 
   applySvgColor(svg, computed.color);

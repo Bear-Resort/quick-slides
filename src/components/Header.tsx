@@ -55,10 +55,7 @@ function ToolbarAction({
       onClick={onClick}
       title={title}
       data-active={active ? "true" : undefined}
-      className={cn(
-        "glass-toolbar-action inline-flex h-auto flex-col items-center gap-0.5 rounded-md px-2 py-1 text-foreground",
-        active && "bg-white/10",
-      )}
+      className="glass-toolbar-action inline-flex h-auto flex-col items-center gap-0.5 rounded-md px-2 py-1 text-foreground"
     >
       <Icon className="size-4" aria-hidden />
       <span className="text-[9px] font-medium leading-none">{label}</span>
@@ -79,17 +76,19 @@ type HeaderProps = {
     onOpenGithub: () => void;
     onUndo?: () => void;
     onRedo?: () => void;
+    canUndo?: boolean;
+    canRedo?: boolean;
   };
 };
 
 function modePillClass(mode: WorkspaceMode): string {
   if (mode === "git") {
-    return "bg-emerald-600 text-white border-emerald-500/40";
+    return "bg-emerald-600 text-white";
   }
   if (mode === "disk") {
-    return "bg-sky-600 text-white border-sky-500/40";
+    return "bg-sky-600 text-white";
   }
-  return "bg-orange-500 text-white border-orange-400/40";
+  return "bg-orange-500 text-white";
 }
 
 export function Header({
@@ -118,6 +117,7 @@ export function Header({
                   type="button"
                   title={t.undo}
                   aria-label={t.undo}
+                  disabled={!workspace.canUndo}
                   onClick={() => workspace.onUndo?.()}
                   className="glass-toolbar-action inline-flex size-8 items-center justify-center rounded-md text-foreground"
                 >
@@ -127,6 +127,7 @@ export function Header({
                   type="button"
                   title={t.redo}
                   aria-label={t.redo}
+                  disabled={!workspace.canRedo}
                   onClick={() => workspace.onRedo?.()}
                   className="glass-toolbar-action inline-flex size-8 items-center justify-center rounded-md text-foreground"
                 >
@@ -145,7 +146,7 @@ export function Header({
 
               <span
                 className={cn(
-                  "inline-flex shrink-0 items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold leading-none",
+                  "inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-[10px] font-semibold leading-none",
                   modePillClass(workspace.mode),
                 )}
               >

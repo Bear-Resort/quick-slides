@@ -46,7 +46,8 @@ Your slide content goes here.
 
 ---
 
-<!-- One image per slide: ![alt](url). Text stays left, image fills the right -->
+<!-- One image: ![caption](url). Alt text shows as the caption under the image.
+     Text left (clips if too long), image right. Two images: title only + two images. -->
 ### With image
 
 Notes stay on the left.

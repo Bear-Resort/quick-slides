@@ -254,10 +254,12 @@ export function StyleSelector({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="glass-toolbar-action inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-foreground"
+        aria-label={t.theme}
+        title={t.theme}
+        className="panel-chrome-action glass-toolbar-action inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-foreground"
       >
-        <Palette className="size-3.5" aria-hidden />
-        {t.theme}
+        <Palette className="size-3.5 shrink-0" aria-hidden />
+        <span className="panel-chrome-action-label">{t.theme}</span>
       </button>
       <ThemeDialog
         open={open}

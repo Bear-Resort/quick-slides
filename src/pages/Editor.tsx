@@ -7,6 +7,7 @@ import { Header, type WorkspaceMode } from "@/components/Header";
 import { SlideActions } from "@/components/SlideActions";
 import {
   MarkdownEditor,
+  type EditorHistoryState,
   type MarkdownEditorHandle,
 } from "@/components/MarkdownEditor";
 import type { SaveStatus } from "@/components/EditorDocumentHeader";
@@ -168,6 +169,10 @@ export function Editor() {
   const entryFile = metadata?.entryFile ?? DECK_MARKDOWN_FILE;
 
   const editorRef = useRef<MarkdownEditorHandle>(null);
+  const [editorHistory, setEditorHistory] = useState<EditorHistoryState>({
+    canUndo: false,
+    canRedo: false,
+  });
   const slideDeckRef = useRef<SlideDeckHandle>(null);
   const saveTimerRef = useRef<number | null>(null);
   const metadataRef = useRef<DeckMetadata | null>(null);
@@ -203,6 +208,12 @@ export function Editor() {
     if (isMarkdownPath(activeFilePath)) return activeFilePath;
     return entryFile;
   }, [activeFilePath, entryFile]);
+
+  /** Export downloads use the markdown basename, not the project/deck title. */
+  const exportFilename = useMemo(() => {
+    const base = fileBasename(styleTargetPath).replace(/\.md$/i, "").trim();
+    return base || presentationFilename;
+  }, [styleTargetPath, presentationFilename]);
 
   const applyStyleFromMetadata = useCallback(
     (meta: DeckMetadata, filePath: string) => {
@@ -922,6 +933,8 @@ export function Editor() {
               ),
             onUndo: () => editorRef.current?.undo(),
             onRedo: () => editorRef.current?.redo(),
+            canUndo: editorHistory.canUndo,
+            canRedo: editorHistory.canRedo,
           }}
         />
         <FilesPanel
@@ -1014,6 +1027,7 @@ export function Editor() {
                 value={editingMarkdown ? markdown : auxFileText}
                 onChange={handleMarkdownChange}
                 onLocateSlide={handleLocateSlide}
+                onHistoryChange={setEditorHistory}
                 placeholder={t.placeholder}
                 showLineNumbers={isLinked}
                 scmLineChanges={isLinked ? scmLineChanges : []}
@@ -1023,7 +1037,7 @@ export function Editor() {
           </section>
 
           <section className="home-split-slides glass-panel flex min-h-0 min-w-0 flex-col">
-            <div className="panel-chrome relative z-[1] flex shrink-0 items-center justify-between border-b px-4 py-2">
+            <div className="panel-chrome panel-chrome-compact relative z-[1] flex shrink-0 items-center justify-between border-b px-4 py-2">
               <span className="relative z-[1] text-xs font-semibold tracking-wide">
                 {t.slides}
               </span>
@@ -1039,7 +1053,7 @@ export function Editor() {
                   markdown={markdown}
                   theme={slideTheme}
                   colorMode={slideColorMode}
-                  filename={presentationFilename}
+                  filename={exportFilename}
                   deckHandle={deckHandle}
                   deckId={deckId ?? null}
                   onPresent={() => setPresenting(true)}

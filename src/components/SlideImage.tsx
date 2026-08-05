@@ -20,7 +20,7 @@ function ImagePlaceholder({
 }) {
   return (
     <div
-      className="flex h-full w-full flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-gray-300 bg-secondary/50 p-8 text-muted-foreground dark:border-gray-700"
+      className="flex h-full min-h-40 w-full flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-gray-300 bg-secondary/50 p-8 text-muted-foreground dark:border-gray-700"
       aria-label={alt || "Image placeholder"}
     >
       <ImageIcon className="size-16" />
@@ -75,16 +75,16 @@ export function SlideImagePanel({ image, variant = "default" }: SlideImageProps)
 
   const showPlaceholder = !hasSrc || !loaded || failed;
   const isHero = variant === "hero";
-  const caption =
-    hasSrc && loaded && !failed ? getSlideImageCaption(image.alt) : null;
+  const caption = getSlideImageCaption(image.alt);
 
   return (
-    <figure
-      className={cn(
-        "slide-image-panel relative flex h-full max-h-full min-h-0 w-full flex-col overflow-hidden",
-      )}
-    >
-      <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+    <figure className="slide-image-panel relative flex h-full max-h-full min-h-0 w-full flex-col items-center justify-center overflow-hidden">
+      <div
+        className={cn(
+          "flex min-h-0 w-full items-center justify-center overflow-hidden",
+          caption ? "max-h-[calc(100%-2.75rem)]" : "max-h-full",
+        )}
+      >
         {showPlaceholder && (
           <ImagePlaceholder
             alt={image.alt}
@@ -115,7 +115,7 @@ export function SlideImagePanel({ image, variant = "default" }: SlideImageProps)
       {caption ? (
         <figcaption
           className={cn(
-            "slide-image-caption shrink-0 pt-3 text-center text-muted-foreground",
+            "slide-image-caption shrink-0 pt-2 text-center text-foreground/70",
             isHero ? "text-2xl" : "text-xl",
           )}
         >

@@ -57,18 +57,31 @@
    * Safari drops color-mix(in oklch, …) rules, so bar buttons inherit the bar
    * color and become indistinguishable from labels.
    */
-  .slide-frame-bar .slide-locate-btn,
-  .app-header-bar button.slide-locate-btn,
-  .app-header-bar .slide-locate-btn {
+  .slide-frame-bar .slide-locate-btn {
     border: 1px solid rgba(255, 255, 255, 0.35);
     background-color: rgba(255, 255, 255, 0.12);
     color: inherit;
   }
 
-  .slide-frame-bar .slide-locate-btn:hover,
-  .app-header-bar button.slide-locate-btn:hover,
-  .app-header-bar .slide-locate-btn:hover {
+  .slide-frame-bar .slide-locate-btn:hover {
     background-color: rgba(255, 255, 255, 0.22);
+    color: inherit;
+  }
+
+  .app-header-bar button.slide-locate-btn,
+  .app-header-bar .slide-locate-btn,
+  .app-header-bar .glass-toolbar-action {
+    border: none;
+    background-color: transparent;
+    color: inherit;
+  }
+
+  .app-header-bar button.slide-locate-btn:hover,
+  .app-header-bar .slide-locate-btn:hover,
+  .app-header-bar .glass-toolbar-action:hover:not(:disabled),
+  .app-header-bar .glass-toolbar-action[data-state="open"],
+  .app-header-bar .glass-toolbar-action[data-active="true"] {
+    background-color: rgba(255, 255, 255, 0.16);
     color: inherit;
   }
 
@@ -131,23 +144,23 @@
   }
 
   .home-split-slides .slide-action-download {
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    background-color: transparent;
+    border: 1px solid rgba(40, 60, 50, 0.28);
+    background-color: rgba(255, 255, 255, 0.42);
     color: inherit;
   }
 
   .home-split-slides .slide-action-download:hover {
-    background-color: rgba(255, 255, 255, 0.12);
+    background-color: rgba(255, 255, 255, 0.88);
   }
 
   .night .home-split-slides .slide-action-download {
-    border-color: rgba(255, 255, 255, 0.28);
-    background-color: transparent;
-    color: inherit;
+    border-color: rgba(255, 255, 255, 0.32);
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #fafafa;
   }
 
   .night .home-split-slides .slide-action-download:hover {
-    background-color: rgba(255, 255, 255, 0.16);
+    background-color: rgba(255, 255, 255, 0.22);
   }
 
   .html-scroll-area {

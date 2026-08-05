@@ -130,32 +130,15 @@ The production build sets `GITHUB_PAGES=true` so assets are served under the `/q
 
 ## PDF export (how it works)
 
-PDF export runs **entirely in your browser** on the live site. GitHub Pages only hosts the static app; it does not generate PDFs on the server.
+**PDF (selectable text)** posts print-ready HTML to Convex `/export-pdf` → Browserless Chrome prints a clean 1280×720 PDF (selectable text/math, no browser print headers). Requires:
 
-When you click **Download → PDF**, the app:
+```bash
+npx convex env set BROWSERLESS_API_TOKEN <token>
+```
 
-1. Renders each slide off-screen in the browser (same React components as the preview)
-2. Loads **MathJax** from jsDelivr CDN to rasterize equations for capture
-3. Screenshots each slide with **html2canvas-pro** and assembles a **jsPDF** file
+and `VITE_CONVEX_SITE_URL` in `.env.local`. Tuned for Browserless **free tier** (short session, small payload, ≤25 slides / ~1.4MB HTML); larger decks fall back to the image path.
 
-**What is bundled at build time (not read from your disk at export time):**
-
-- Theme sticker images from `themes/bear-academy/` and `themes/the-beauties/` → copied into `dist/assets/` by Vite
-- KaTeX fonts and app CSS/JS
-
-**What is fetched at export time over the network:**
-
-- MathJax (`cdn.jsdelivr.net`) — required for reliable equation rendering in PDFs
-- Any **external images** in your Markdown (must allow cross-origin access, or they may be missing from the PDF)
-
-There are **no local filesystem paths** involved on the deployed site. If you see errors mentioning `/themes/...` or missing files, that usually means an old build or a URL that was not bundled — redeploy from `main` after a fresh `pnpm build`.
-
-**Tips if PDF export fails on the live site:**
-
-- Use a normal browser tab (not an embedded preview with blocked network access)
-- Check the browser console for MathJax or CORS errors
-- Prefer HTTPS image URLs that allow cross-origin embedding
-- Sticker themes use large PNGs; export waits for them to load, but a slow connection may take a few seconds
+**PDF (image)** uses **html2canvas-pro** + **jsPDF** (silent download; not selectable).
 
 ## Tech stack
 

@@ -50,7 +50,7 @@ export function ExportSlidePage({
           className="h-full w-full"
           style={{ width: SLIDE_WIDTH, height: SLIDE_HEIGHT }}
         >
-          <SlideView markdown={markdown} exportMode />
+          <SlideView markdown={markdown} />
         </SlideCanvasContent>
       </div>
     </div>

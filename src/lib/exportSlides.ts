@@ -9,6 +9,7 @@ import {
   prepareSlideForCapture,
   waitForCaptureImages,
   waitForExportReady,
+  remeasureSlideFitContent,
   waitForSlideFitContent,
 } from "@/lib/exportCapture";
 import {
@@ -22,7 +23,6 @@ import { resolveDeckImageSrc } from "@/lib/library/deckImages";
 import { replaceMathEquationsForCapture } from "@/lib/exportMathJax";
 import { getLanguage, type Language } from "@/lib/language";
 import { getExportBasename } from "@/lib/presentationFilename";
-import { presenterUiCopy } from "@/lib/presenterUi";
 import { splitSlides } from "@/lib/slides";
 import {
   getSlideThemeAttributes,
@@ -72,33 +72,32 @@ function collectEmbeddedStyles(): string {
   return chunks.join("\n");
 }
 
-const PRESENTER_STYLES = `
+/** Minimal standalone HTML viewer chrome (black stage + corner nav). */
+const EXPORT_VIEWER_STYLES = `
 html, body {
   margin: 0;
   height: 100%;
   min-height: 100vh;
-  min-height: -webkit-fill-available;
   min-height: 100dvh;
   overflow: hidden;
+  background: #000;
+  color: #fff;
   font-family: ui-sans-serif, system-ui, sans-serif;
 }
-.export-presenter {
+.export-viewer {
   position: fixed;
   inset: 0;
-  display: flex;
-  flex-direction: column;
-  min-height: -webkit-fill-available;
-  background: var(--background, #fff);
-  color: var(--foreground, #111);
+  background: #000;
 }
-.export-presenter-stage {
-  flex: 1 1 0%;
+.export-viewer-stage {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 0;
-  padding: 1.5rem 2.5rem;
   overflow: hidden;
+  padding: 3rem 4.5rem;
+  box-sizing: border-box;
 }
 .export-slide {
   display: none;
@@ -116,159 +115,53 @@ html, body {
   transform-origin: center center;
   -webkit-transform-origin: center center;
 }
-.presenter-bar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
-  border-top-width: 1px;
-  border-top-style: solid;
-}
-.presenter-counter {
-  flex-shrink: 0;
-  border-radius: 0.375rem;
-  padding: 0.375rem 0.75rem;
-  font-size: 0.875rem;
+.export-viewer-counter {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  font-size: 0.95rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+  user-select: none;
 }
-.presenter-nav {
-  flex: 1 1 0%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  min-width: 0;
-}
-.presenter-actions {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.presenter-btn {
+.export-viewer-nav {
+  position: absolute;
+  bottom: 1.25rem;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  border-radius: 0.25rem;
-  border-width: 1px;
-  border-style: solid;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
   cursor: pointer;
-  font: inherit;
-  color: inherit;
-  transition: background-color 0.15s ease;
 }
-.presenter-btn:hover:not(:disabled) {
-  filter: brightness(1.08);
+.export-viewer-nav:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.55);
 }
-.presenter-btn:disabled {
-  opacity: 0.4;
+.export-viewer-nav:disabled {
+  opacity: 0.28;
   cursor: not-allowed;
 }
-.presenter-btn-nav {
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 500;
+.export-viewer-nav svg {
+  width: 1.25rem;
+  height: 1.25rem;
 }
-.presenter-btn-icon {
-  width: 2.25rem;
-  height: 2.25rem;
-  padding: 0;
-  font-size: 0.875rem;
-  font-weight: 700;
+.export-viewer-nav-prev {
+  left: 1.25rem;
 }
-.presenter-btn-icon svg {
-  width: 1rem;
-  height: 1rem;
-  flex-shrink: 0;
-}
-.presenter-help {
-  position: relative;
-}
-.presenter-help-tooltip {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 0.5rem);
-  display: none;
-  width: max-content;
-  max-width: 16rem;
-  border: 1px solid var(--border, #ccc);
-  border-radius: 0.375rem;
-  background: var(--popover, #fff);
-  color: var(--popover-foreground, #111);
-  padding: 0.375rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 400;
-  line-height: 1.4;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-  white-space: normal;
-  text-align: left;
-}
-.presenter-help:hover .presenter-help-tooltip,
-.presenter-help:focus-within .presenter-help-tooltip {
-  display: block;
-}
-.presenter-settings {
-  position: relative;
-}
-.presenter-settings-menu {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 0.5rem);
-  z-index: 50;
-  display: none;
-  min-width: 12rem;
-  overflow: hidden;
-  border: 1px solid var(--border, #ccc);
-  border-radius: 0.375rem;
-  background: var(--popover, #fff);
-  color: var(--popover-foreground, #111);
-  padding: 0.25rem;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-}
-.presenter-settings-menu.is-open {
-  display: block;
-}
-.presenter-settings-label {
-  padding: 0.375rem 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-.presenter-settings-item {
-  display: block;
-  width: 100%;
-  border: none;
-  background: transparent;
-  color: inherit;
-  padding: 0.375rem 0.5rem;
-  font-size: 0.875rem;
-  text-align: left;
-  border-radius: 0.25rem;
-  cursor: pointer;
-}
-.presenter-settings-item:hover {
-  background: var(--accent, #eee);
-}
-`;
-
-const EXPORT_SAFARI_COLOR_FALLBACKS = `
-@supports (font: -apple-system-body) {
-  .slide-frame-bar .slide-locate-btn,
-  .app-header-bar .slide-locate-btn {
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    background-color: rgba(255, 255, 255, 0.12);
-    color: inherit;
-  }
-  .slide-frame-bar .slide-locate-btn:hover,
-  .app-header-bar .slide-locate-btn:hover {
-    background-color: rgba(255, 255, 255, 0.22);
-    color: inherit;
-  }
-  .presenter-settings-item:hover {
-    background-color: rgba(128, 128, 128, 0.15);
-  }
+.export-viewer-nav-next {
+  right: 1.25rem;
 }
 `;
 
@@ -276,89 +169,15 @@ const ICON_CHEVRON_LEFT =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>';
 const ICON_CHEVRON_RIGHT =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
-const ICON_SETTINGS =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>';
-const ICON_X =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
 
-function buildPresenterScript(
-  initialLanguage: Language,
-  initialColorMode: SlideColorMode,
-): string {
-  const ui = JSON.stringify(presenterUiCopy);
-
+function buildExportViewerScript(): string {
   return `
 (function () {
-  var UI = ${ui};
   var slides = Array.prototype.slice.call(document.querySelectorAll(".export-slide"));
   var index = 0;
-  var language = ${JSON.stringify(initialLanguage)};
-  var colorMode = ${JSON.stringify(initialColorMode)};
-  var presenter = document.getElementById("presenter");
   var counter = document.getElementById("counter");
   var prevBtn = document.getElementById("prev");
   var nextBtn = document.getElementById("next");
-  var settingsMenu = document.getElementById("settings-menu");
-  var settingsToggle = document.getElementById("settings-toggle");
-  var themeItem = document.getElementById("theme-item");
-  var langItem = document.getElementById("lang-item");
-  var exitBtn = document.getElementById("exit");
-
-  try {
-    var storedLanguage = localStorage.getItem("language");
-    if (storedLanguage === "en" || storedLanguage === "zh") {
-      language = storedLanguage;
-    }
-  } catch (e) {}
-
-  function labels() {
-    return UI[language] || UI.en;
-  }
-
-  function themeLabel() {
-    var t = labels();
-    return colorMode === "dark" ? t.themeDark : t.themeLight;
-  }
-
-  function languageToggleLabel() {
-    return language === "en"
-      ? "Language: " + UI.en.languageEn
-      : "语言: " + UI.zh.languageZh;
-  }
-
-  function applyTheme() {
-    document.documentElement.classList.toggle("night", colorMode === "dark");
-    if (presenter) {
-      presenter.classList.remove("slide-color-light", "slide-color-dark");
-      presenter.classList.add(colorMode === "dark" ? "slide-color-dark" : "slide-color-light");
-    }
-  }
-
-  function closeSettingsMenu() {
-    if (settingsMenu) settingsMenu.classList.remove("is-open");
-  }
-
-  function updateChrome() {
-    var t = labels();
-    var prevLabel = document.getElementById("prev-label");
-    var nextLabel = document.getElementById("next-label");
-    if (prevLabel) prevLabel.textContent = t.previous;
-    if (nextLabel) nextLabel.textContent = t.next;
-    if (themeItem) themeItem.textContent = t.themeLabel + ": " + themeLabel();
-    if (langItem) langItem.textContent = languageToggleLabel();
-    var settingsLabel = document.getElementById("settings-label");
-    if (settingsLabel) settingsLabel.textContent = t.settings;
-    var hint = document.getElementById("help-hint");
-    if (hint) hint.textContent = t.hint;
-    if (settingsToggle) {
-      settingsToggle.setAttribute("aria-label", t.settings);
-      settingsToggle.setAttribute("title", t.settings);
-    }
-    if (exitBtn) {
-      exitBtn.setAttribute("aria-label", t.exit);
-      exitBtn.setAttribute("title", t.exit);
-    }
-  }
 
   function viewportSize() {
     var vv = window.visualViewport;
@@ -368,27 +187,6 @@ function buildPresenterScript(
     };
   }
 
-  function fullscreenElement() {
-    return document.fullscreenElement || document.webkitFullscreenElement || null;
-  }
-
-  function requestFullscreen() {
-    var el = document.documentElement;
-    if (el.requestFullscreen) {
-      el.requestFullscreen().catch(function () {});
-    } else if (el.webkitRequestFullscreen) {
-      el.webkitRequestFullscreen();
-    }
-  }
-
-  function exitFullscreen() {
-    if (document.exitFullscreen) {
-      document.exitFullscreen().catch(function () {});
-    } else if (document.webkitExitFullscreen) {
-      document.webkitExitFullscreen();
-    }
-  }
-
   function fitActiveSlide() {
     var active = slides[index];
     if (!active) return;
@@ -396,7 +194,7 @@ function buildPresenterScript(
     if (!page) return;
     var size = viewportSize();
     var scale = Math.min(
-      (size.width - 32) / ${SLIDE_WIDTH},
+      (size.width - 120) / ${SLIDE_WIDTH},
       (size.height - 120) / ${SLIDE_HEIGHT},
       1
     );
@@ -410,7 +208,7 @@ function buildPresenterScript(
       slide.classList.toggle("is-active", i === index);
     });
     if (counter) {
-      counter.textContent = (index + 1) + " / " + slides.length;
+      counter.textContent = (index + 1) + "/" + slides.length;
     }
     if (prevBtn) prevBtn.disabled = index <= 0;
     if (nextBtn) nextBtn.disabled = index >= slides.length - 1;
@@ -431,31 +229,8 @@ function buildPresenterScript(
     }
   }
 
-  function toggleTheme() {
-    colorMode = colorMode === "dark" ? "light" : "dark";
-    applyTheme();
-    updateChrome();
-  }
-
-  function toggleLanguage() {
-    language = language === "en" ? "zh" : "en";
-    try {
-      localStorage.setItem("language", language);
-    } catch (e) {}
-    updateChrome();
-  }
-
-  function exitPresenter() {
-    if (fullscreenElement()) {
-      exitFullscreen();
-    }
-  }
-
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      exitPresenter();
-    } else if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") {
+    if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") {
       e.preventDefault();
       next();
     } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
@@ -469,49 +244,16 @@ function buildPresenterScript(
       e.preventDefault();
       index = slides.length - 1;
       render();
-    } else if (e.key === "f" || e.key === "F") {
-      if (!fullscreenElement()) {
-        requestFullscreen();
-      } else {
-        exitFullscreen();
-      }
     }
   });
 
   if (prevBtn) prevBtn.addEventListener("click", prev);
   if (nextBtn) nextBtn.addEventListener("click", next);
-  if (settingsToggle) {
-    settingsToggle.addEventListener("click", function (e) {
-      e.stopPropagation();
-      if (settingsMenu) settingsMenu.classList.toggle("is-open");
-    });
-  }
-  if (settingsMenu) {
-    settingsMenu.addEventListener("click", function (e) {
-      e.stopPropagation();
-    });
-  }
-  document.addEventListener("click", closeSettingsMenu);
-  if (themeItem) {
-    themeItem.addEventListener("click", function () {
-      toggleTheme();
-      closeSettingsMenu();
-    });
-  }
-  if (langItem) {
-    langItem.addEventListener("click", function () {
-      toggleLanguage();
-      closeSettingsMenu();
-    });
-  }
-  if (exitBtn) exitBtn.addEventListener("click", exitPresenter);
   window.addEventListener("resize", fitActiveSlide);
   if (window.visualViewport) {
     window.visualViewport.addEventListener("resize", fitActiveSlide);
   }
 
-  applyTheme();
-  updateChrome();
   render();
 })();
 `;
@@ -592,7 +334,6 @@ async function prepareSlideElementForExport(
 
   await waitForSlideFitContent(captureScope);
   prepareSlideForCapture(slideEl);
-  inlineColumnStylesForCapture(captureScope);
   prepareKatexForCapture(captureScope);
   await replaceMathEquationsForCapture(captureScope);
   prepareKatexForCapture(captureScope);
@@ -601,8 +342,240 @@ async function prepareSlideElementForExport(
   await waitForExportReady(captureScope);
   revealLoadedImagesForCapture(captureScope);
   await embedImagesForExport(captureScope, exportImages);
+  // Remeasure after fonts/images so columns match the live preview (prefer 2+scale).
+  await remeasureSlideFitContent(captureScope);
+  inlineColumnStylesForCapture(captureScope);
 
   return pageRoot;
+}
+
+/** Print/PDF embeds: JPEG for photos; stickers get small WebP+alpha in embedImagesForExport. */
+const PRINT_PDF_IMAGE_OPTIONS = {
+  maxEmbedDimension: 960,
+  jpegQuality: 0.72,
+  forceJpeg: true,
+  skipFonts: true,
+} as const;
+
+/**
+ * Prepare a slide for Chrome print-to-PDF: keep real KaTeX/text (selectable).
+ * Embeds images; does not rasterize math.
+ */
+async function prepareSlideElementForPrintPdf(
+  slideEl: HTMLElement,
+  exportImages: ExportImageOptions,
+): Promise<HTMLElement> {
+  const pageRoot = slideEl.classList.contains("export-slide-page")
+    ? slideEl
+    : slideEl.querySelector<HTMLElement>(".export-slide-page") ?? slideEl;
+  pageRoot.classList.add("export-pdf-page");
+  pageRoot.style.width = `${SLIDE_WIDTH}px`;
+  pageRoot.style.height = `${SLIDE_HEIGHT}px`;
+  pageRoot.style.overflow = "hidden";
+  pageRoot.style.position = "relative";
+
+  const frame = pageRoot.querySelector<HTMLElement>(".slide-frame");
+  const canvas = pageRoot.querySelector<HTMLElement>(".slide-canvas");
+  for (const element of [frame, canvas]) {
+    if (!element) continue;
+    element.style.width = `${SLIDE_WIDTH}px`;
+    element.style.height = `${SLIDE_HEIGHT}px`;
+    element.style.overflow = "hidden";
+  }
+
+  await waitForSlideFitContent(pageRoot);
+  await waitForExportReady(pageRoot);
+  await waitForCaptureImages(pageRoot);
+  revealLoadedImagesForCapture(pageRoot);
+  await embedImagesForExport(pageRoot, {
+    ...exportImages,
+    ...PRINT_PDF_IMAGE_OPTIONS,
+  });
+  // Remeasure after fonts/images settle — early measure often jumps to 3 clipped cols.
+  await remeasureSlideFitContent(pageRoot);
+  inlineColumnStylesForCapture(pageRoot);
+  await waitForExportReady(pageRoot);
+
+  pageRoot.querySelectorAll<HTMLElement>(".katex-mathml").forEach((el) => {
+    el.style.position = "absolute";
+    el.style.clip = "rect(1px, 1px, 1px, 1px)";
+    el.style.width = "1px";
+    el.style.height = "1px";
+    el.style.overflow = "hidden";
+    el.style.whiteSpace = "nowrap";
+  });
+
+  return pageRoot;
+}
+
+const PDF_PRINT_STYLES = `
+@page {
+  size: ${SLIDE_WIDTH}px ${SLIDE_HEIGHT}px;
+  margin: 0;
+}
+html, body {
+  margin: 0;
+  padding: 0;
+  width: ${SLIDE_WIDTH}px;
+  background: #fff;
+  /* Match live preview (index.css / index.html). KaTeX keeps its own faces. */
+  font-family: "Noto Serif SC", serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.export-pdf-page {
+  font-family: "Noto Serif SC", serif;
+}
+.export-pdf-page {
+  width: ${SLIDE_WIDTH}px;
+  height: ${SLIDE_HEIGHT}px;
+  overflow: hidden;
+  page-break-after: always;
+  break-after: page;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+.export-pdf-page:last-child {
+  page-break-after: auto;
+  break-after: auto;
+}
+/* Page chrome */
+.slide-frame,
+.slide-canvas,
+.slide-canvas > div {
+  width: ${SLIDE_WIDTH}px !important;
+  max-width: ${SLIDE_WIDTH}px !important;
+  height: ${SLIDE_HEIGHT}px !important;
+  box-sizing: border-box !important;
+}
+.slide-content-layout {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  width: ${SLIDE_WIDTH}px !important;
+  max-width: ${SLIDE_WIDTH}px !important;
+  box-sizing: border-box !important;
+  padding-left: 48px !important;
+  padding-right: 48px !important;
+}
+/* Text-only body must span the full content width (not an image-column half). */
+[data-slide-layout="content"] > .slide-content-slide-body,
+[data-slide-layout="content"] .slide-fit-content-body,
+[data-slide-layout="content"] .slide-fit-content-body > div {
+  width: ${SLIDE_WIDTH - 96}px !important;
+  max-width: ${SLIDE_WIDTH - 96}px !important;
+  min-width: ${SLIDE_WIDTH - 96}px !important;
+  align-self: stretch !important;
+  overflow: visible !important;
+  box-sizing: border-box !important;
+}
+/* Kill CSS multi-column — text overflow uses the same 2-col grid as image+text. */
+.slide-content-overflow .markdown-preview.slide-content,
+.markdown-preview.slide-content[data-slide-two-col="true"] {
+  columns: auto !important;
+  column-count: auto !important;
+  column-width: auto !important;
+  column-gap: normal !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+/* Shared 2-column grid: image+text row AND text-only overflow panes. */
+.slide-sticker-shift-target.grid,
+.slide-text-two-col,
+.slide-two-col-grid {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  column-gap: 2.5rem !important;
+  align-items: start !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+.slide-two-col-pane {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.slide-content-overflow .markdown-preview.slide-content > :is(ul, ol, p) {
+  break-inside: auto;
+  -webkit-column-break-inside: auto;
+}
+.slide-content-overflow .markdown-preview.slide-content li {
+  break-inside: auto;
+  -webkit-column-break-inside: auto;
+}
+.slide-content-overflow .katex-display {
+  display: block;
+  width: 100%;
+  text-align: center;
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+}
+.slide-image-caption {
+  display: block;
+  text-align: center;
+  color: inherit;
+  opacity: 0.75;
+}
+img {
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+.slide-image-panel img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+`;
+
+/** Soft caps so Browserless free tier stays comfortable (compressed images keep payloads down). */
+const SELECTABLE_PDF_MAX_SLIDES = 25;
+const SELECTABLE_PDF_MAX_HTML_CHARS = 4_000_000;
+const SELECTABLE_PDF_MAX_CSS_CHARS = 800_000;
+
+function buildPdfPrintDocument(
+  slideFragments: string[],
+  colorMode: SlideColorMode,
+  slideThemeId: SlideThemeId,
+  embeddedStyles: string,
+  documentTitle: string,
+): string {
+  const nightClass = colorMode === "dark" ? " night" : "";
+  const slideThemeClass = getSlideThemeAttributes(slideThemeId).className;
+  const colorModeClass = slideColorModeClass(colorMode);
+  const pages = slideFragments.join("\n");
+  const styles =
+    embeddedStyles.length > SELECTABLE_PDF_MAX_CSS_CHARS
+      ? embeddedStyles.slice(0, SELECTABLE_PDF_MAX_CSS_CHARS)
+      : embeddedStyles;
+
+  // Same Noto Serif SC as the live preview (index.html). Browserless must be
+  // allowed time to download the face — see waitForTimeout in convex/http.ts.
+  return `<!DOCTYPE html>
+<html lang="en" class="${nightClass.trim()}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=${SLIDE_WIDTH}">
+  <title>${escapeHtml(documentTitle)}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.17.0/dist/katex.min.css" crossorigin="anonymous">
+  <style>
+${styles}
+${PDF_PRINT_STYLES}
+  </style>
+</head>
+<body class="${slideThemeClass} ${colorModeClass}">
+${pages}
+</body>
+</html>`;
 }
 
 function downloadBlob(blob: Blob, filename: string): void {
@@ -614,6 +587,81 @@ function downloadBlob(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
+function getConvexExportPdfUrl(): string | null {
+  const site = (import.meta.env.VITE_CONVEX_SITE_URL as string | undefined)?.trim();
+  if (site) {
+    return `${site.replace(/\/$/, "")}/export-pdf`;
+  }
+  const proxy = (import.meta.env.VITE_GITHUB_OAUTH_PROXY as string | undefined)?.trim();
+  if (proxy?.includes(".convex.site")) {
+    return `${proxy.replace(/\/github-oauth\/?$/, "")}/export-pdf`;
+  }
+  return null;
+}
+
+async function renderPdfViaConvexBackend(html: string): Promise<Blob> {
+  const endpoint = getConvexExportPdfUrl();
+  if (!endpoint) {
+    throw new Error("PDF_BACKEND_NOT_CONFIGURED");
+  }
+
+  const controller = new AbortController();
+  // Client abort before free-tier 60s session wall.
+  const timeoutId = window.setTimeout(() => controller.abort(), 55_000);
+
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/pdf",
+      },
+      body: JSON.stringify({ html }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("PDF export timed out waiting for the server");
+    }
+    throw new Error(
+      error instanceof Error
+        ? `PDF export network error: ${error.message}`
+        : "PDF export network error",
+    );
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+
+  if (response.status === 503) {
+    throw new Error("PDF_BACKEND_NOT_CONFIGURED");
+  }
+
+  if (!response.ok) {
+    let detail = `PDF export failed (${response.status})`;
+    try {
+      const json = (await response.json()) as {
+        error_description?: string;
+        error?: string;
+      };
+      detail = json.error_description || json.error || detail;
+    } catch {
+      // ignore
+    }
+    throw new Error(detail);
+  }
+
+  const blob = await response.blob();
+  if (blob.size === 0) {
+    throw new Error("PDF export returned an empty file");
+  }
+  return blob;
+}
+
+/**
+ * Selectable-text PDF via Convex → Browserless (tight 1280×720, no print chrome).
+ * Sized for free-tier limits; falls back to image PDF when too large or backend fails.
+ */
 export async function downloadSlidesPdf(
   markdown: string,
   theme: SlideThemeId,
@@ -622,18 +670,112 @@ export async function downloadSlidesPdf(
   deckHandle: FileSystemDirectoryHandle | null = null,
   deckId: string | null = null,
 ): Promise<void> {
-  const { jsPDF } = await import("jspdf");
-  const exportBasename = getExportBasename(filename, getLanguage());
+  const language = getLanguage();
+  const exportBasename = getExportBasename(filename, language);
+  const documentTitle = filename.trim() || exportBasename;
   const exportImages: ExportImageOptions = { deckHandle, deckId };
+  const slideCount = splitSlides(markdown).length;
+  const slideFragments: string[] = [];
 
-  const pdf = new jsPDF({
-    orientation: "landscape",
-    unit: "px",
-    format: [SLIDE_WIDTH, SLIDE_HEIGHT],
-    hotfixes: ["px_scaling"],
-  });
+  const useImageFallback = async (reason: string) => {
+    console.warn(`${reason}; using image PDF instead.`);
+    await downloadSlidesPdfImage(
+      markdown,
+      theme,
+      colorMode,
+      filename,
+      deckHandle,
+      deckId,
+    );
+  };
 
   try {
+    if (!getConvexExportPdfUrl()) {
+      await useImageFallback("Selectable PDF backend URL is not configured");
+      return;
+    }
+
+    if (slideCount > SELECTABLE_PDF_MAX_SLIDES) {
+      await useImageFallback(
+        `Deck has ${slideCount} slides (limit ${SELECTABLE_PDF_MAX_SLIDES} for free-tier selectable PDF)`,
+      );
+      return;
+    }
+
+    await renderSlidesForExport(
+      markdown,
+      theme,
+      colorMode,
+      exportImages,
+      async (slideEl) => {
+        const pageRoot = await prepareSlideElementForPrintPdf(
+          slideEl,
+          exportImages,
+        );
+        slideFragments.push(pageRoot.outerHTML);
+      },
+    );
+
+    const embeddedStyles = await embedUrlsInCss(collectEmbeddedStyles(), {
+      ...exportImages,
+      ...PRINT_PDF_IMAGE_OPTIONS,
+    });
+    const html = buildPdfPrintDocument(
+      slideFragments,
+      colorMode,
+      theme,
+      embeddedStyles,
+      documentTitle,
+    );
+
+    if (html.length > SELECTABLE_PDF_MAX_HTML_CHARS) {
+      await useImageFallback(
+        `Print HTML is ${html.length} chars (limit ${SELECTABLE_PDF_MAX_HTML_CHARS})`,
+      );
+      return;
+    }
+
+    try {
+      const pdfBlob = await renderPdfViaConvexBackend(html);
+      downloadBlob(pdfBlob, `${exportBasename}.pdf`);
+    } catch (error) {
+      console.warn("Selectable PDF backend failed; using image PDF.", error);
+      await downloadSlidesPdfImage(
+        markdown,
+        theme,
+        colorMode,
+        filename,
+        deckHandle,
+        deckId,
+      );
+    }
+  } finally {
+    clearExportImageCache();
+  }
+}
+
+/** Silent PDF download via html2canvas-pro + jsPDF (image pages; works on mobile). */
+export async function downloadSlidesPdfImage(
+  markdown: string,
+  theme: SlideThemeId,
+  colorMode: SlideColorMode,
+  filename: string,
+  deckHandle: FileSystemDirectoryHandle | null = null,
+  deckId: string | null = null,
+): Promise<void> {
+  const language = getLanguage();
+  const exportBasename = getExportBasename(filename, language);
+  const exportImages: ExportImageOptions = { deckHandle, deckId };
+
+  try {
+    const { jsPDF } = await import("jspdf");
+    const pdf = new jsPDF({
+      orientation: "landscape",
+      unit: "px",
+      format: [SLIDE_WIDTH, SLIDE_HEIGHT],
+      hotfixes: ["px_scaling"],
+    });
+
     await renderSlidesForExport(
       markdown,
       theme,
@@ -642,16 +784,16 @@ export async function downloadSlidesPdf(
       async (slideEl, index) => {
         const pageRoot = await prepareSlideElementForExport(slideEl, exportImages);
 
-      const slideCanvas = pageRoot.querySelector<HTMLElement>(".slide-canvas");
-      if (!(slideCanvas instanceof HTMLElement)) {
-        throw new Error("Slide canvas not found for PDF export");
-      }
+        const slideCanvas = pageRoot.querySelector<HTMLElement>(".slide-canvas");
+        if (!(slideCanvas instanceof HTMLElement)) {
+          throw new Error("Slide canvas not found for PDF export");
+        }
 
-      if (index > 0) {
-        pdf.addPage([SLIDE_WIDTH, SLIDE_HEIGHT], "landscape");
-      }
+        if (index > 0) {
+          pdf.addPage([SLIDE_WIDTH, SLIDE_HEIGHT], "landscape");
+        }
 
-      await rasterizeSlideToPdf(pdf, pageRoot, slideCanvas);
+        await rasterizeSlideToPdf(pdf, pageRoot, slideCanvas);
       },
     );
 
@@ -723,11 +865,8 @@ function buildHtmlDocument(
   const nightClass = colorMode === "dark" ? " night" : "";
   const slideThemeClass = getSlideThemeAttributes(slideThemeId).className;
   const colorModeClass = slideColorModeClass(colorMode);
-  const t = presenterUiCopy[language];
-  const themeLabel = colorMode === "dark" ? t.themeDark : t.themeLight;
-  const languageToggleLabel =
-    language === "en" ? `Language: ${t.languageEn}` : `语言: ${t.languageZh}`;
-  const presenterScript = buildPresenterScript(language, colorMode);
+  const total = slideFragments.length;
+  const viewerScript = buildExportViewerScript();
 
   return `<!DOCTYPE html>
 <html lang="${language}" class="${nightClass.trim()}">
@@ -740,49 +879,23 @@ function buildHtmlDocument(
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
 ${embeddedStyles}
-${PRESENTER_STYLES}
-${EXPORT_SAFARI_COLOR_FALLBACKS}
+${EXPORT_VIEWER_STYLES}
   </style>
 </head>
 <body>
-  <div id="presenter" class="export-presenter slide-presenter ${slideThemeClass} ${colorModeClass}">
-    <div id="stage" class="export-presenter-stage">
+  <div class="export-viewer slide-presenter ${slideThemeClass} ${colorModeClass}">
+    <div id="counter" class="export-viewer-counter" aria-live="polite">1/${total}</div>
+    <div id="stage" class="export-viewer-stage">
 ${slidesHtml}
     </div>
-    <div class="slide-frame-bar presenter-bar">
-      <span id="counter" class="slide-locate-btn presenter-counter">1 / ${slideFragments.length}</span>
-      <div class="presenter-nav">
-        <button type="button" id="prev" class="slide-locate-btn presenter-btn presenter-btn-nav" disabled>
-          ${ICON_CHEVRON_LEFT}
-          <span id="prev-label">${t.previous}</span>
-        </button>
-        <button type="button" id="next" class="slide-locate-btn presenter-btn presenter-btn-nav"${slideFragments.length <= 1 ? " disabled" : ""}>
-          <span id="next-label">${t.next}</span>
-          ${ICON_CHEVRON_RIGHT}
-        </button>
-      </div>
-      <div class="presenter-actions">
-        <button type="button" class="slide-locate-btn presenter-btn presenter-btn-icon presenter-help" aria-label="${t.help}">
-          <span>?</span>
-          <span id="help-hint" class="presenter-help-tooltip">${t.hint}</span>
-        </button>
-        <div class="presenter-settings">
-          <button type="button" id="settings-toggle" class="slide-locate-btn presenter-btn presenter-btn-icon" aria-label="${t.settings}" title="${t.settings}">
-            ${ICON_SETTINGS}
-          </button>
-          <div id="settings-menu" class="presenter-settings-menu">
-            <div id="settings-label" class="presenter-settings-label">${t.settings}</div>
-            <button type="button" id="theme-item" class="presenter-settings-item">${t.themeLabel}: ${themeLabel}</button>
-            <button type="button" id="lang-item" class="presenter-settings-item">${languageToggleLabel}</button>
-          </div>
-        </div>
-        <button type="button" id="exit" class="slide-locate-btn presenter-btn presenter-btn-icon" aria-label="${t.exit}" title="${t.exit}">
-          ${ICON_X}
-        </button>
-      </div>
-    </div>
+    <button type="button" id="prev" class="export-viewer-nav export-viewer-nav-prev" aria-label="Previous" disabled>
+      ${ICON_CHEVRON_LEFT}
+    </button>
+    <button type="button" id="next" class="export-viewer-nav export-viewer-nav-next" aria-label="Next"${total <= 1 ? " disabled" : ""}>
+      ${ICON_CHEVRON_RIGHT}
+    </button>
   </div>
-  <script>${presenterScript}<\/script>
+  <script>${viewerScript}<\/script>
 </body>
 </html>`;
 }

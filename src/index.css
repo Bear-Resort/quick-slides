@@ -422,9 +422,10 @@
 
 .glass-toolbar-action {
   border-radius: 0.65rem !important;
-  border: 1px solid transparent !important;
-  background: transparent !important;
-  box-shadow: none;
+  border: 1px solid hsl(150 22% 28% / 0.28) !important;
+  background: hsl(0 0% 100% / 0.42) !important;
+  color: hsl(var(--foreground)) !important;
+  box-shadow: inset 0 1px 0 0 hsl(0 0% 100% / 0.55);
   transition:
     background 0.2s ease,
     border-color 0.2s ease,
@@ -436,30 +437,88 @@
 .glass-toolbar-action[data-state="open"] {
   background: linear-gradient(
     165deg,
-    hsl(0 0% 100% / 0.85) 0%,
-    hsl(145 40% 97% / 0.55) 100%
+    hsl(0 0% 100% / 0.95) 0%,
+    hsl(145 40% 96% / 0.78) 100%
   ) !important;
-  border-color: hsl(150 25% 40% / 0.16) !important;
+  border-color: hsl(150 25% 30% / 0.4) !important;
   color: hsl(var(--foreground)) !important;
   box-shadow:
-    inset 0 1px 0 0 hsl(0 0% 100% / 0.9),
-    0 3px 12px hsl(150 25% 35% / 0.1) !important;
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.95),
+    0 3px 12px hsl(150 25% 35% / 0.14) !important;
   backdrop-filter: blur(16px) saturate(170%);
   -webkit-backdrop-filter: blur(16px) saturate(170%);
+}
+
+.night .glass-toolbar-action {
+  border-color: hsl(0 0% 100% / 0.32) !important;
+  background: hsl(0 0% 100% / 0.1) !important;
+  color: hsl(0 0% 98%) !important;
+  box-shadow: inset 0 1px 0 0 hsl(0 0% 100% / 0.14);
 }
 
 .night .glass-toolbar-action:hover:not(:disabled),
 .night .glass-toolbar-action[data-state="open"] {
   background: linear-gradient(
     165deg,
-    hsl(0 0% 100% / 0.28) 0%,
-    hsl(var(--foreground) / 0.12) 100%
+    hsl(0 0% 100% / 0.34) 0%,
+    hsl(var(--foreground) / 0.18) 100%
   ) !important;
-  border-color: hsl(0 0% 100% / 0.28) !important;
+  border-color: hsl(0 0% 100% / 0.45) !important;
+  color: hsl(0 0% 100%) !important;
   box-shadow:
-    inset 0 1px 0 0 hsl(0 0% 100% / 0.4),
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.45),
     inset 0 -1px 0 0 hsl(0 0% 0% / 0.08),
-    0 3px 12px hsl(0 0% 0% / 0.16) !important;
+    0 3px 12px hsl(0 0% 0% / 0.2) !important;
+}
+
+/* Header chrome: borderless, no fill until hover / open / active */
+.app-header-bar .glass-toolbar-action,
+.app-header-bar button.slide-locate-btn,
+.app-header-bar .slide-locate-btn {
+  border-color: transparent !important;
+  border-width: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.app-header-bar .glass-toolbar-action:hover:not(:disabled),
+.app-header-bar .glass-toolbar-action[data-state="open"],
+.app-header-bar .glass-toolbar-action[data-active="true"],
+.app-header-bar button.slide-locate-btn:hover,
+.app-header-bar .slide-locate-btn:hover {
+  background: hsl(var(--foreground) / 0.1) !important;
+  box-shadow: none !important;
+}
+
+.night .app-header-bar .glass-toolbar-action,
+.night .app-header-bar button.slide-locate-btn,
+.night .app-header-bar .slide-locate-btn {
+  border-color: transparent !important;
+  border-width: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.night .app-header-bar .glass-toolbar-action:hover:not(:disabled),
+.night .app-header-bar .glass-toolbar-action[data-state="open"],
+.night .app-header-bar .glass-toolbar-action[data-active="true"],
+.night .app-header-bar button.slide-locate-btn:hover,
+.night .app-header-bar .slide-locate-btn:hover {
+  background: hsl(0 0% 100% / 0.12) !important;
+  box-shadow: none !important;
+}
+
+.glass-toolbar-action:disabled {
+  opacity: 0.38 !important;
+  cursor: not-allowed !important;
+  transition: none !important;
+  box-shadow: none !important;
+}
+
+.night .glass-toolbar-action:disabled {
+  opacity: 0.32 !important;
 }
 
 .glass-menu-separator {
@@ -530,7 +589,8 @@
   box-shadow:
     inset 0 1px 0 0 hsl(0 0% 100% / 0.55),
     inset 0 -1px 0 0 hsl(150 25% 35% / 0.04);
-  color: hsl(var(--muted-foreground));
+  /* Stronger than muted-foreground so "Slides" / filenames stay readable */
+  color: hsl(var(--foreground) / 0.88);
 }
 
 .panel-chrome::before {
@@ -553,7 +613,7 @@
   box-shadow:
     inset 0 1px 0 0 hsl(0 0% 100% / 0.1),
     inset 0 -1px 0 0 hsl(0 0% 0% / 0.12);
-  color: hsl(var(--muted-foreground));
+  color: hsl(0 0% 98% / 0.92);
 }
 
 .night .panel-chrome::before {
@@ -562,6 +622,58 @@
     hsl(155 20% 16% / 0.72) 0%,
     hsl(155 18% 12% / 0.55) 100%
   );
+}
+
+/* Narrow slides chrome: action buttons collapse to icons; labels on hover */
+.panel-chrome-compact {
+  container-type: inline-size;
+  container-name: panel-chrome;
+}
+
+.panel-chrome-action-label,
+.panel-chrome-action-chevron {
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  max-width: 12rem;
+  opacity: 1;
+  transition:
+    max-width 0.18s ease,
+    opacity 0.15s ease;
+}
+
+@container panel-chrome (max-width: 26rem) {
+  .panel-chrome-action {
+    gap: 0 !important;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+
+  .panel-chrome-action-label,
+  .panel-chrome-action-chevron {
+    max-width: 0;
+    opacity: 0;
+  }
+
+  .panel-chrome-action:hover,
+  .panel-chrome-action:focus-visible,
+  .panel-chrome-action[data-state="open"] {
+    gap: 0.375rem !important;
+  }
+
+  .panel-chrome-action:hover .panel-chrome-action-label,
+  .panel-chrome-action:focus-visible .panel-chrome-action-label,
+  .panel-chrome-action[data-state="open"] .panel-chrome-action-label {
+    max-width: 10rem;
+    opacity: 1;
+  }
+
+  .panel-chrome-action:hover .panel-chrome-action-chevron,
+  .panel-chrome-action:focus-visible .panel-chrome-action-chevron,
+  .panel-chrome-action[data-state="open"] .panel-chrome-action-chevron {
+    max-width: 0.75rem;
+    opacity: 0.6;
+  }
 }
 
 /* Segmented tabs (settings theme control) */
@@ -1076,19 +1188,43 @@ html.energy-save .glass-toggle[aria-checked="true"] {
   white-space: normal;
 }
 
-/* Overflow: flow body text into 2–3 columns when content does not fit. */
-.slide-content-overflow .markdown-preview.slide-content {
-  columns: var(--slide-overflow-columns, 2);
-  column-gap: 2rem;
+/* Overflow text: same 2-col CSS grid as image+text (not CSS multi-column). */
+.slide-content-overflow .markdown-preview.slide-content,
+.markdown-preview.slide-content[data-slide-two-col="true"] {
+  columns: auto !important;
+  column-count: auto !important;
+  column-width: auto !important;
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
-  transform: scale(var(--slide-content-scale, 1));
-  transform-origin: top left;
 }
 
-.slide-content-overflow.slide-content-scaled .markdown-preview.slide-content {
-  width: calc(100% / var(--slide-content-scale, 1));
+.slide-text-two-col,
+.slide-two-col-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 2.5rem;
+  align-items: start;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.slide-two-col-pane {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+[data-slide-layout="content"] > .slide-content-slide-body {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  align-self: stretch;
 }
 
 .slide-fit-content-body {
@@ -1103,7 +1239,6 @@ html.energy-save .glass-toggle[aria-checked="true"] {
 .slide-fit-content-body.slide-content-overflow {
   padding-top: 1.5rem;
   box-sizing: border-box;
-  max-height: 100%;
 }
 
 .slide-fit-content-body > .markdown-preview.slide-content {
@@ -1373,34 +1508,10 @@ html.energy-save .glass-toggle[aria-checked="true"] {
   padding-left: calc(3rem + var(--slide-sticker-reserve-left, 0px));
 }
 
+/* Legacy sticker column mitigation — disabled; overflow uses explicit two-pane split. */
 .slide-sticker-mitigation-columns .slide-content-slide-body .markdown-preview.slide-content {
-  columns: var(--slide-content-columns, 2);
-  column-gap: 2.5rem;
-  width: 100%;
-  max-width: 100%;
-}
-
-.slide-sticker-mitigation-columns .slide-content-slide-body .markdown-preview.slide-content > :is(blockquote, pre, .katex-display, h3, h4) {
-  break-inside: avoid;
-  -webkit-column-break-inside: avoid;
-}
-
-.slide-sticker-mitigation-columns .slide-content-slide-body .markdown-preview.slide-content > p {
-  break-inside: auto;
-  -webkit-column-break-inside: auto;
-}
-
-.slide-sticker-mitigation-columns .slide-content-slide-body .markdown-preview.slide-content > :is(ul, ol),
-.slide-sticker-mitigation-columns .slide-content-slide-body :is(.slide-list-ordered, .slide-list-bulleted) {
-  columns: unset;
-  break-inside: auto;
-  -webkit-column-break-inside: auto;
-}
-
-.slide-sticker-mitigation-columns .slide-content-slide-body .markdown-preview.slide-content li,
-.slide-sticker-mitigation-columns .slide-content-slide-body :is(.slide-list-ordered, .slide-list-bulleted) li {
-  break-inside: auto;
-  -webkit-column-break-inside: auto;
+  columns: auto !important;
+  column-count: auto !important;
 }
 
 .slide-theme-tinted.slide-theme-gray {
@@ -1494,8 +1605,6 @@ html.energy-save .glass-toggle[aria-checked="true"] {
   ) !important;
 }
 
-.app-header-bar button.slide-locate-btn,
-.app-header-bar .slide-locate-btn,
 .slide-locate-btn {
   border-color: hsl(var(--border) / 0.28);
   background: hsl(var(--foreground) / 0.06);
@@ -1503,8 +1612,6 @@ html.energy-save .glass-toggle[aria-checked="true"] {
   box-shadow: none;
 }
 
-.app-header-bar button.slide-locate-btn:hover,
-.app-header-bar .slide-locate-btn:hover,
 .slide-locate-btn:hover {
   background: hsl(var(--foreground) / 0.12);
   color: inherit;

@@ -1,5 +1,12 @@
 import { SLIDE_HEIGHT, SLIDE_WIDTH } from "@/lib/slideCanvas";
-import { SLIDE_FIT_READY_ATTR } from "@/lib/slideFitContent";
+import {
+  SLIDE_FIT_READY_ATTR,
+  SLIDE_FIT_REMEASURE_EVENT,
+} from "@/lib/slideFitContent";
+import {
+  materializeTwoColumnsInRoot,
+  pinSlideContentGeometry,
+} from "@/lib/slideTwoColumn";
 
 const KATEX_FONT_FAMILIES = [
   "KaTeX_AMS",
@@ -189,29 +196,39 @@ export async function waitForSlideFitContent(root: ParentNode): Promise<void> {
   }
 }
 
-/** Inline computed column styles so html2canvas renders multi-column text. */
-export function inlineColumnStylesForCapture(root: ParentNode): void {
-  root
-    .querySelectorAll<HTMLElement>(
-      ".slide-content-overflow .markdown-preview.slide-content",
-    )
-    .forEach((element) => {
-      const computed = getComputedStyle(element);
-      element.style.columns = computed.columns;
-      element.style.columnGap = computed.columnGap;
-      element.style.width = computed.width;
-      element.style.maxWidth = computed.maxWidth;
-      element.style.transform = computed.transform;
-      element.style.transformOrigin = computed.transformOrigin;
-    });
+/** Remeasure after fonts/images settle so column count matches the live preview. */
+export async function remeasureSlideFitContent(root: ParentNode): Promise<void> {
+  const bodies = root.querySelectorAll<HTMLElement>(".slide-fit-content-body");
+  if (bodies.length === 0) return;
 
-  root.querySelectorAll<HTMLElement>(".slide-fit-content-body.slide-content-overflow").forEach(
-    (element) => {
-      const computed = getComputedStyle(element);
-      element.style.paddingTop = computed.paddingTop;
-      element.style.maxHeight = computed.maxHeight;
-    },
-  );
+  for (const body of bodies) {
+    body.removeAttribute(SLIDE_FIT_READY_ATTR);
+    const container = body.parentElement?.parentElement;
+    container?.dispatchEvent(
+      new Event(SLIDE_FIT_REMEASURE_EVENT, { bubbles: true }),
+    );
+  }
+
+  await waitForSlideFitContent(root);
+}
+
+/**
+ * Finalize layout for print/PDF: explicit 2-pane row with locked pixel widths.
+ */
+export function inlineColumnStylesForCapture(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>(".slide-fit-content-body").forEach((body) => {
+    body.style.alignSelf = "stretch";
+    if (body.classList.contains("slide-content-overflow")) {
+      body.style.maxHeight = "none";
+      body.style.overflow = "visible";
+    }
+  });
+
+  // Split any overflow markdown that React did not already turn into two panes.
+  materializeTwoColumnsInRoot(root);
+
+  // Bake page + shared 2-col grids (image+text and text overflow use the same grid).
+  pinSlideContentGeometry(root);
 }
 
 /** Wait for slide images and CSS background images before html2canvas capture. */

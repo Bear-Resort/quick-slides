@@ -62,16 +62,24 @@ export type MarkdownEditorHandle = {
   redo: () => void;
 };
 
+export type EditorHistoryState = {
+  canUndo: boolean;
+  canRedo: boolean;
+};
+
 type MarkdownEditorProps = {
   value: string;
   onChange: (value: string) => void;
   onLocateSlide: (slideIndex: number) => void;
+  onHistoryChange?: (state: EditorHistoryState) => void;
   placeholder?: string;
   className?: string;
   showLineNumbers?: boolean;
   scmLineChanges?: ScmLineChange[];
   readOnly?: boolean;
 };
+
+const MAX_UNDO_STACK = 100;
 
 function getLineCharIndex(lines: string[], lineIndex: number): number {
   let charIndex = 0;
@@ -143,6 +151,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       value,
       onChange,
       onLocateSlide,
+      onHistoryChange,
       placeholder,
       className,
       showLineNumbers = false,
@@ -175,6 +184,81 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const mirrorRef = useRef<HTMLDivElement>(null);
     const editorStateRef = useRef({ selectionStart: 0, selectionEnd: 0, scrollTop: 0 });
+    const historyRef = useRef({
+      past: [] as string[],
+      future: [] as string[],
+      lastValue: value,
+      applying: false,
+    });
+    const onHistoryChangeRef = useRef(onHistoryChange);
+    onHistoryChangeRef.current = onHistoryChange;
+
+    const publishHistoryState = useCallback(() => {
+      onHistoryChangeRef.current?.({
+        canUndo: historyRef.current.past.length > 0,
+        canRedo: historyRef.current.future.length > 0,
+      });
+    }, []);
+
+    const commitValue = useCallback(
+      (next: string, options?: { recordHistory?: boolean }) => {
+        const recordHistory = options?.recordHistory !== false;
+        const history = historyRef.current;
+        if (next === history.lastValue) return;
+
+        if (recordHistory && !history.applying) {
+          history.past.push(history.lastValue);
+          if (history.past.length > MAX_UNDO_STACK) {
+            history.past.shift();
+          }
+          history.future = [];
+        }
+
+        history.lastValue = next;
+        publishHistoryState();
+        onChange(next);
+      },
+      [onChange, publishHistoryState],
+    );
+
+    const undoEdit = useCallback(() => {
+      const history = historyRef.current;
+      if (history.past.length === 0) return;
+      const previous = history.past.pop()!;
+      history.future.push(history.lastValue);
+      history.applying = true;
+      history.lastValue = previous;
+      publishHistoryState();
+      onChange(previous);
+    }, [onChange, publishHistoryState]);
+
+    const redoEdit = useCallback(() => {
+      const history = historyRef.current;
+      if (history.future.length === 0) return;
+      const next = history.future.pop()!;
+      history.past.push(history.lastValue);
+      history.applying = true;
+      history.lastValue = next;
+      publishHistoryState();
+      onChange(next);
+    }, [onChange, publishHistoryState]);
+
+    // Reset or acknowledge external value updates (file switch / undo apply).
+    useEffect(() => {
+      const history = historyRef.current;
+      if (value === history.lastValue) return;
+      if (history.applying) {
+        history.applying = false;
+        history.lastValue = value;
+        return;
+      }
+      history.past = [];
+      history.future = [];
+      history.lastValue = value;
+      history.applying = false;
+      publishHistoryState();
+    }, [value, publishHistoryState]);
+
     const pendingInsertRef = useRef<{
       selectionStart: number;
       selectionEnd: number;
@@ -279,9 +363,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           selectionEnd: result.selectionEnd,
           scrollTop: editorStateRef.current.scrollTop,
         };
-        onChange(result.value);
+        commitValue(result.value);
       },
-      [onChange],
+      [commitValue],
     );
 
     useLayoutEffect(() => {
@@ -372,18 +456,14 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       locateLine,
       focus: () => textareaRef.current?.focus(),
       undo: () => {
-        const el = textareaRef.current;
-        if (!el) return;
-        el.focus({ preventScroll: true });
-        document.execCommand("undo");
+        textareaRef.current?.focus({ preventScroll: true });
+        undoEdit();
       },
       redo: () => {
-        const el = textareaRef.current;
-        if (!el) return;
-        el.focus({ preventScroll: true });
-        document.execCommand("redo");
+        textareaRef.current?.focus({ preventScroll: true });
+        redoEdit();
       },
-    }), [locateLine]);
+    }), [locateLine, undoEdit, redoEdit]);
 
     const handleLocateSlide = (separatorLine: number) => {
       const marker = navigation.separators.find((item) => item.line === separatorLine);
@@ -422,8 +502,23 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           readOnly={readOnly}
           onChange={(event) => {
             if (readOnly) return;
-            onChange(event.target.value);
+            commitValue(event.target.value);
             updateCursorLine();
+          }}
+          onKeyDown={(event) => {
+            if (readOnly) return;
+            const key = event.key.toLowerCase();
+            const mod = event.metaKey || event.ctrlKey;
+            if (!mod) return;
+            if (key === "z" && !event.shiftKey) {
+              event.preventDefault();
+              undoEdit();
+              return;
+            }
+            if ((key === "z" && event.shiftKey) || key === "y") {
+              event.preventDefault();
+              redoEdit();
+            }
           }}
           onScroll={(event) => {
             const nextScrollTop = event.currentTarget.scrollTop;

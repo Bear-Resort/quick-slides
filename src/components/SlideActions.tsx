@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { downloadSlidesHtml, downloadSlidesPdf } from "@/lib/exportSlides";
+import { downloadSlidesHtml, downloadSlidesPdf, downloadSlidesPdfImage } from "@/lib/exportSlides";
 import type { SlideColorMode, SlideThemeId } from "@/lib/slideThemes";
 import { useLanguage } from "@/lib/useLanguage";
 
@@ -14,18 +14,22 @@ const copy = {
   en: {
     present: "Present",
     download: "Download",
-    downloadPdf: "PDF",
+    downloadPdf: "PDF (selectable text)",
+    downloadPdfImage: "PDF (image)",
     downloadHtml: "HTML (presentation)",
     exportingPdf: "Exporting PDF…",
+    exportingPdfImage: "Exporting PDF…",
     exportingHtml: "Exporting HTML…",
     exportFailed: "Export failed. Please try again.",
   },
   zh: {
     present: "演示",
     download: "下载",
-    downloadPdf: "PDF",
+    downloadPdf: "PDF（可选中文字）",
+    downloadPdfImage: "PDF（图片）",
     downloadHtml: "HTML（演示模式）",
     exportingPdf: "正在导出 PDF…",
+    exportingPdfImage: "正在导出 PDF…",
     exportingHtml: "正在导出 HTML…",
     exportFailed: "导出失败，请重试。",
   },
@@ -52,16 +56,47 @@ export function SlideActions({
 }: SlideActionsProps) {
   const language = useLanguage();
   const t = copy[language];
-  const [exporting, setExporting] = useState<"pdf" | "html" | null>(null);
+  const [exporting, setExporting] = useState<"pdf" | "pdf-image" | "html" | null>(
+    null,
+  );
 
   const handlePdfExport = async () => {
     if (exporting) return;
     setExporting("pdf");
     try {
-      await downloadSlidesPdf(markdown, theme, colorMode, filename, deckHandle, deckId);
+      await downloadSlidesPdf(
+        markdown,
+        theme,
+        colorMode,
+        filename,
+        deckHandle,
+        deckId,
+      );
     } catch (error) {
       console.error("PDF export failed:", error);
-      window.alert(t.exportFailed);
+      const message = error instanceof Error ? error.message : "";
+      window.alert(message ? `${t.exportFailed}\n${message}` : t.exportFailed);
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const handlePdfImageExport = async () => {
+    if (exporting) return;
+    setExporting("pdf-image");
+    try {
+      await downloadSlidesPdfImage(
+        markdown,
+        theme,
+        colorMode,
+        filename,
+        deckHandle,
+        deckId,
+      );
+    } catch (error) {
+      console.error("PDF image export failed:", error);
+      const message = error instanceof Error ? error.message : "";
+      window.alert(message ? `${t.exportFailed}\n${message}` : t.exportFailed);
     } finally {
       setExporting(null);
     }
@@ -80,15 +115,26 @@ export function SlideActions({
     }
   };
 
+  const downloadLabel =
+    exporting === "pdf"
+      ? t.exportingPdf
+      : exporting === "pdf-image"
+        ? t.exportingPdfImage
+        : exporting === "html"
+          ? t.exportingHtml
+          : t.download;
+
   return (
     <div className="flex items-center gap-2">
       <button
         type="button"
         onClick={onPresent}
-        className="slide-action-present glass-primary inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold"
+        aria-label={t.present}
+        title={t.present}
+        className="panel-chrome-action slide-action-present glass-primary inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold"
       >
-        <Play className="size-3.5 fill-current" aria-hidden="true" />
-        {t.present}
+        <Play className="size-3.5 shrink-0 fill-current" aria-hidden="true" />
+        <span className="panel-chrome-action-label">{t.present}</span>
       </button>
 
       <DropdownMenu>
@@ -96,20 +142,24 @@ export function SlideActions({
           <button
             type="button"
             disabled={exporting !== null}
-            className="slide-action-download glass-toolbar-action inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label={downloadLabel}
+            title={downloadLabel}
+            className="panel-chrome-action slide-action-download glass-toolbar-action inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-foreground disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <Download className="size-3.5" aria-hidden="true" />
-            {exporting === "pdf"
-              ? t.exportingPdf
-              : exporting === "html"
-                ? t.exportingHtml
-                : t.download}
-            <ChevronDown className="size-3 opacity-60" aria-hidden="true" />
+            <Download className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="panel-chrome-action-label">{downloadLabel}</span>
+            <ChevronDown
+              className="panel-chrome-action-chevron size-3 shrink-0 opacity-60"
+              aria-hidden="true"
+            />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={() => void handlePdfExport()}>
             {t.downloadPdf}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => void handlePdfImageExport()}>
+            {t.downloadPdfImage}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => void handleHtmlExport()}>
             {t.downloadHtml}

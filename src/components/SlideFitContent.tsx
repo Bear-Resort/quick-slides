@@ -6,22 +6,30 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { flushSync } from "react-dom";
 import { cn } from "@/lib/utils";
-import { SLIDE_FIT_READY_ATTR } from "@/lib/slideFitContent";
+import {
+  SLIDE_FIT_READY_ATTR,
+  SLIDE_FIT_REMEASURE_EVENT,
+} from "@/lib/slideFitContent";
+import {
+  splitMarkdownToTwoColumnHtml,
+  type TwoColumnHtml,
+} from "@/lib/slideTwoColumn";
 
 type SlideFitContentProps = {
   children: ReactNode;
   className?: string;
   contentClassName?: string;
-  /** Center content vertically when it fits on the slide. */
+  /**
+   * - `columns`: short text stays 1 column; overflow uses 2 full-width panes
+   *   via the same CSS grid as image+text (`grid-cols-2`).
+   * - `clip`: always 1 column; overflow is clipped (text beside an image).
+   */
+  mode?: "columns" | "clip";
+  /** Center only when content fits in a single column. */
   verticalAlign?: "top" | "center";
-  /** Skip auto-scaling only (export still uses overflow columns). */
-  disableFit?: boolean;
 };
-
-type OverflowColumns = 1 | 2 | 3;
-
-const FILL_MARGIN = 0.98;
 
 function getMarkdownEl(content: HTMLElement): HTMLElement | null {
   const el = content.querySelector(".markdown-preview.slide-content");
@@ -32,36 +40,18 @@ function measureBlockHeight(el: HTMLElement): number {
   return Math.max(el.getBoundingClientRect().height, el.scrollHeight);
 }
 
-function applyOverflowColumns(
-  content: HTMLElement,
-  columns: OverflowColumns,
-): void {
-  content.classList.toggle("slide-content-overflow", columns > 1);
-  if (columns > 1) {
-    content.style.setProperty("--slide-overflow-columns", String(columns));
-  } else {
-    content.style.removeProperty("--slide-overflow-columns");
-  }
-}
-
-function clearFitStyles(content: HTMLElement): void {
-  content.style.removeProperty("--slide-content-scale");
-  content.style.removeProperty("--slide-overflow-columns");
-  content.classList.remove("slide-content-overflow");
-}
-
 export function SlideFitContent({
   children,
   className,
   contentClassName,
+  mode = "columns",
   verticalAlign = "top",
-  disableFit = false,
 }: SlideFitContentProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [overflowColumns, setOverflowColumns] = useState<OverflowColumns>(1);
-  const [scale, setScale] = useState(1);
-  const [heightOverflow, setHeightOverflow] = useState(false);
+  const [twoCol, setTwoCol] = useState<TwoColumnHtml | null>(null);
+  const [overflowing, setOverflowing] = useState(false);
+  const [fitEpoch, setFitEpoch] = useState(0);
   const remeasureGenerationRef = useRef(0);
 
   const remeasure = useCallback(() => {
@@ -70,59 +60,44 @@ export function SlideFitContent({
     if (!container || !content) return;
 
     const generation = ++remeasureGenerationRef.current;
-    clearFitStyles(content);
     content.removeAttribute(SLIDE_FIT_READY_ATTR);
+
+    flushSync(() => {
+      setTwoCol(null);
+      setOverflowing(false);
+    });
 
     requestAnimationFrame(() => {
       if (generation !== remeasureGenerationRef.current) return;
 
-      const measureTarget = () => getMarkdownEl(content) ?? content;
-      const measureOverflow = () => {
-        const target = measureTarget();
-        return measureBlockHeight(target) > container.clientHeight + 1;
-      };
-
-      let columns: OverflowColumns = 1;
-
-      if (measureOverflow()) {
-        columns = 2;
-        applyOverflowColumns(content, 2);
-        void content.offsetHeight;
-
-        if (measureOverflow()) {
-          columns = 3;
-          applyOverflowColumns(content, 3);
-          void content.offsetHeight;
-        }
+      if (container.clientHeight < 8) {
+        return;
       }
 
-      let nextScale = 1;
-      if (!disableFit) {
-        const target = measureTarget();
-        const targetHeight = measureBlockHeight(target);
-        const targetWidth = target.getBoundingClientRect().width;
-        const scaleH = container.clientHeight / targetHeight;
-        const scaleW = container.clientWidth / Math.max(targetWidth, 1);
+      const markdown = getMarkdownEl(content);
+      const measureTarget = markdown ?? content;
+      const overflows =
+        measureBlockHeight(measureTarget) > container.clientHeight + 1;
 
-        if (scaleH < 1) {
-          nextScale = Math.max(Math.min(scaleH, scaleW, 1) * FILL_MARGIN, 0.4);
-        } else if (scaleW < 1) {
-          nextScale = scaleW * FILL_MARGIN;
-        }
-
-        if (nextScale < 0.999) {
-          content.style.setProperty("--slide-content-scale", String(nextScale));
-        }
+      let nextTwoCol: TwoColumnHtml | null = null;
+      if (mode === "columns" && overflows && markdown) {
+        nextTwoCol = splitMarkdownToTwoColumnHtml(markdown);
       }
 
       if (generation !== remeasureGenerationRef.current) return;
 
-      setOverflowColumns(columns);
-      setScale(nextScale);
-      setHeightOverflow(!disableFit && nextScale < 0.999);
-      content.setAttribute(SLIDE_FIT_READY_ATTR, "true");
+      flushSync(() => {
+        setTwoCol(nextTwoCol);
+        setOverflowing(overflows);
+        setFitEpoch((epoch) => epoch + 1);
+      });
     });
-  }, [disableFit]);
+  }, [mode]);
+
+  useLayoutEffect(() => {
+    if (fitEpoch === 0) return;
+    contentRef.current?.setAttribute(SLIDE_FIT_READY_ATTR, "true");
+  }, [fitEpoch, twoCol]);
 
   useLayoutEffect(() => {
     remeasure();
@@ -131,49 +106,108 @@ export function SlideFitContent({
 
     const observer = new ResizeObserver(() => remeasure());
     observer.observe(container);
-    return () => observer.disconnect();
+
+    const onRemeasure = () => remeasure();
+    container.addEventListener(SLIDE_FIT_REMEASURE_EVENT, onRemeasure);
+
+    return () => {
+      observer.disconnect();
+      container.removeEventListener(SLIDE_FIT_REMEASURE_EVENT, onRemeasure);
+    };
   }, [children, remeasure]);
 
   const shouldCenter =
-    verticalAlign === "center" && !heightOverflow && overflowColumns === 1;
-  const scaled = !disableFit && scale < 0.999;
+    verticalAlign === "center" && !overflowing && !twoCol;
 
-  const contentStyle: CSSProperties | undefined =
-    overflowColumns > 1 || scaled
-      ? ({
-          ...(overflowColumns > 1
-            ? { "--slide-overflow-columns": overflowColumns }
-            : {}),
-          ...(scaled ? { "--slide-content-scale": scale } : {}),
-        } as CSSProperties)
-      : undefined;
+  const hostStyle: CSSProperties = {
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+  };
+
+  // Same track sizing as image+text `.grid.grid-cols-2.gap-10`.
+  const gridStyle: CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+    columnGap: "2.5rem",
+    alignItems: "start",
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
+  };
+
+  const paneStyle: CSSProperties = {
+    minWidth: 0,
+    width: "auto",
+    maxWidth: "100%",
+    boxSizing: "border-box",
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
+  };
 
   return (
     <div
       ref={containerRef}
-      className={cn("h-full min-h-0 w-full overflow-hidden", className)}
+      className={cn(
+        "h-full min-h-0 w-full",
+        // Do not clip the right text pane (that was hiding column 2 in PDF).
+        twoCol ? "overflow-visible" : "overflow-hidden",
+        className,
+      )}
     >
       <div
         className={cn(
-          "flex h-full w-full justify-start",
-          shouldCenter ? "items-center" : "items-start",
+          "flex h-full w-full min-w-0 flex-col",
+          shouldCenter ? "justify-center" : "justify-start",
         )}
       >
         <div
           ref={contentRef}
           className={cn(
-            "slide-fit-content-body w-full min-h-0",
-            overflowColumns > 1
-              ? "slide-content-overflow h-auto self-start"
+            "slide-fit-content-body w-full min-w-0 min-h-0",
+            twoCol
+              ? "slide-content-overflow h-full"
               : shouldCenter
                 ? "h-auto"
                 : "h-full",
-            scaled && "slide-content-scaled",
             contentClassName,
           )}
-          style={contentStyle}
+          style={hostStyle}
         >
-          {children}
+          {twoCol ? (
+            <div
+              className={cn(
+                twoCol.className || "markdown-preview slide-content w-full",
+              )}
+              data-slide-two-col="true"
+              style={{
+                width: "100%",
+                maxWidth: "100%",
+                minWidth: 0,
+                boxSizing: "border-box",
+                columns: "auto",
+              }}
+            >
+              <div
+                className="slide-text-two-col slide-two-col-grid grid w-full grid-cols-2 items-start gap-10"
+                style={gridStyle}
+              >
+                <div
+                  className="slide-two-col-pane min-w-0"
+                  style={paneStyle}
+                  dangerouslySetInnerHTML={{ __html: twoCol.left }}
+                />
+                <div
+                  className="slide-two-col-pane min-w-0"
+                  style={paneStyle}
+                  dangerouslySetInnerHTML={{ __html: twoCol.right }}
+                />
+              </div>
+            </div>
+          ) : (
+            children
+          )}
         </div>
       </div>
     </div>
