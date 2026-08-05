@@ -10,9 +10,11 @@ import {
 } from "lucide-react";
 import { getAuthStatus } from "@/lib/github/auth";
 import {
+  formatContentUpdateMessage,
   formatDeckGithubLinkLabel,
   getDeckGithubLink,
   pullDeckFromGithub,
+  PushConflictError,
   pushDeckToGithub,
   type DeckGithubLink,
   type PulledDeck,
@@ -40,15 +42,22 @@ const copy = {
     notLinked: "Link a GitHub repository for this presentation.",
     linkInGithub: "Choose a repo in GitHub",
     branch: "Branch",
-    commitMessage: "Commit message",
-    commitPlaceholder: "Update presentation",
-    push: "Push",
+    commitMessage: "Commit message (optional)",
+    commitPlaceholder: "Leave empty for Content update at MMDDYY HHMM",
+    push: "Push staged",
+    quickPush: "Quick push all",
+    forcePush: "Force push",
+    forceConfirm:
+      "Force push overwrites the remote with your local files. Continue?",
     pull: "Pull",
+    pullMerge: "Pull (take remote)",
     refresh: "Refresh",
     pushing: "Pushing…",
     pulling: "Pulling…",
     pushOk: "Pushed to GitHub.",
     pullOk: "Pulled from GitHub.",
+    conflictHint:
+      "Remote changed. Pull to take remote, or Force push to keep local.",
     staged: "Included for push",
     unstaged: "Changes",
     includeFile: "Include file",
@@ -70,15 +79,20 @@ const copy = {
     notLinked: "为此演示文稿关联一个 GitHub 仓库。",
     linkInGithub: "在 GitHub 中选择仓库",
     branch: "分支",
-    commitMessage: "提交说明",
-    commitPlaceholder: "更新演示文稿",
-    push: "推送",
+    commitMessage: "提交说明（可选）",
+    commitPlaceholder: "留空则使用 Content update at MMDDYY HHMM",
+    push: "推送已纳入",
+    quickPush: "一键推送全部",
+    forcePush: "强制推送",
+    forceConfirm: "强制推送会用本地文件覆盖远程，确定继续？",
     pull: "拉取",
+    pullMerge: "拉取（采用远程）",
     refresh: "刷新",
     pushing: "推送中…",
     pulling: "拉取中…",
     pushOk: "已推送到 GitHub。",
     pullOk: "已从 GitHub 拉取。",
+    conflictHint: "远程有变更。可拉取采用远程，或强制推送保留本地。",
     staged: "已纳入推送",
     unstaged: "更改",
     includeFile: "纳入文件",
@@ -125,6 +139,7 @@ export function DeckGitSection({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [conflict, setConflict] = useState(false);
   const [scmChanges, setScmChanges] = useState<ScmFileChange[]>([]);
 
   const refreshScm = useCallback(async () => {
@@ -158,29 +173,60 @@ export function DeckGitSection({
     void refreshScm();
   }, [active, scmEpoch, refreshScm]);
 
-  const handlePush = async () => {
+  const runPush = async (options: {
+    paths?: string[];
+    force?: boolean;
+    useTimestampMessage?: boolean;
+  }) => {
     if (!deckId || !deckHandle) return;
     setBusy(true);
     setError(null);
     setInfo(null);
+    setConflict(false);
     try {
-      const staged = [...getStagedPaths(deckId)];
-      const paths = staged.length > 0 ? staged : undefined;
+      const commitMessage = options.useTimestampMessage
+        ? formatContentUpdateMessage()
+        : message.trim() || formatContentUpdateMessage();
       await pushDeckToGithub({
         deckId,
         deckHandle,
-        message: message || undefined,
-        paths,
+        message: commitMessage,
+        paths: options.paths,
+        force: options.force,
       });
-      if (staged.length > 0) clearStaged(deckId);
-      setInfo(t.pushOk);
+      clearStaged(deckId);
+      setInfo(`${t.pushOk} (${commitMessage})`);
       await refreshScm();
       onScmChanged?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (err instanceof PushConflictError) {
+        setConflict(true);
+        setError(`${t.conflictHint}\n${err.message}`);
+      } else {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
       setBusy(false);
     }
+  };
+
+  const handlePushStaged = async () => {
+    if (!deckId) return;
+    const staged = [...getStagedPaths(deckId)];
+    const paths = staged.length > 0 ? staged : undefined;
+    await runPush({ paths, useTimestampMessage: !message.trim() });
+  };
+
+  const handleQuickPush = async () => {
+    await runPush({ useTimestampMessage: true });
+  };
+
+  const handleForcePush = async () => {
+    if (!window.confirm(t.forceConfirm)) return;
+    await runPush({
+      force: true,
+      useTimestampMessage: !message.trim(),
+    });
   };
 
   const handleInclude = async (path: string) => {
@@ -221,6 +267,7 @@ export function DeckGitSection({
     setBusy(true);
     setError(null);
     setInfo(null);
+    setConflict(false);
     try {
       const pulled = await pullDeckFromGithub({ deckId, deckHandle });
       onPulled?.(pulled);
@@ -288,6 +335,15 @@ export function DeckGitSection({
           className="w-full rounded-md border border-white/15 bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
       </label>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void handleQuickPush()}
+        className="glass-primary inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-50"
+      >
+        <ArrowUp className="size-3.5" aria-hidden />
+        {busy ? t.pushing : t.quickPush}
+      </button>
       <div className="flex gap-2">
         <button
           type="button"
@@ -296,15 +352,14 @@ export function DeckGitSection({
           className="glass-toolbar-action inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold disabled:opacity-50"
         >
           <ArrowDown className="size-3.5" aria-hidden />
-          {busy ? t.pulling : t.pull}
+          {busy ? t.pulling : conflict ? t.pullMerge : t.pull}
         </button>
         <button
           type="button"
           disabled={busy}
-          onClick={() => void handlePush()}
-          className="glass-primary inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-50"
+          onClick={() => void handlePushStaged()}
+          className="glass-toolbar-action inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold disabled:opacity-50"
         >
-          <ArrowUp className="size-3.5" aria-hidden />
           {busy
             ? t.pushing
             : scmChanges.some((c) => c.staged)
@@ -321,9 +376,17 @@ export function DeckGitSection({
           <RefreshCw className="size-3.5" aria-hidden />
         </button>
       </div>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void handleForcePush()}
+        className="glass-toolbar-action w-full rounded-lg border border-amber-500/40 px-3 py-1.5 text-[11px] font-semibold text-amber-800 disabled:opacity-50 dark:text-amber-300"
+      >
+        {t.forcePush}
+      </button>
 
       {error ? (
-        <p className="text-xs font-medium text-red-600 dark:text-red-400">
+        <p className="whitespace-pre-wrap text-xs font-medium text-red-600 dark:text-red-400">
           {error}
         </p>
       ) : null}

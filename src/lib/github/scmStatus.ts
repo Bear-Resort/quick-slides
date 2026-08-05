@@ -13,9 +13,9 @@ import {
   isTextPath,
   listRepoFilePaths,
   readRepoFileBytes,
-  readRepoTextFile,
   writeRepoBinaryFile,
   writeRepoTextFile,
+  gitBlobSha,
   type RepoFileEntry,
 } from "@/lib/github/workingTree";
 
@@ -50,6 +50,8 @@ async function listRemoteFilesRecursive(
   );
 
   for (const entry of entries) {
+    if (entry.name.toLowerCase().endsWith(".crswap")) continue;
+    if (entry.name.startsWith(".")) continue;
     const relative = dirRelative ? `${dirRelative}/${entry.name}` : entry.name;
     if (entry.type === "dir") {
       const nested = await listRemoteFilesRecursive(link, relative);
@@ -82,16 +84,6 @@ export async function getRemoteText(
   return decodeBase64ToText(file.content);
 }
 
-async function buffersEqual(a: ArrayBuffer, b: ArrayBuffer): Promise<boolean> {
-  if (a.byteLength !== b.byteLength) return false;
-  const va = new Uint8Array(a);
-  const vb = new Uint8Array(b);
-  for (let i = 0; i < va.length; i += 1) {
-    if (va[i] !== vb[i]) return false;
-  }
-  return true;
-}
-
 export async function computeScmChanges(options: {
   deckId: string;
   deckHandle: FileSystemDirectoryHandle;
@@ -122,27 +114,13 @@ export async function computeScmChanges(options: {
       continue;
     }
 
-    let different = false;
-    if (isTextPath(path)) {
-      const localText = (await readRepoTextFile(options.deckHandle, path)) ?? "";
-      const remoteText = await getRemoteText(link, path);
-      different = remoteText === null || remoteText !== localText;
-    } else {
-      const localBytes = await readRepoFileBytes(options.deckHandle, path);
-      const remoteFile = await getFileContent(
-        link.owner,
-        link.repo,
-        remotePath(link, path),
-        link.branch,
-      );
-      if (!localBytes || !remoteFile?.content) {
-        different = true;
-      } else {
-        const remoteBytes = decodeBase64ToBytes(remoteFile.content);
-        const buffer = new ArrayBuffer(remoteBytes.byteLength);
-        new Uint8Array(buffer).set(remoteBytes);
-        different = !(await buffersEqual(localBytes, buffer));
-      }
+    // Compare git blob SHA (same as GitHub Contents `sha`) so large images
+    // that omit `content` in the API still compare correctly after push.
+    const localBytes = await readRepoFileBytes(options.deckHandle, path);
+    let different = true;
+    if (localBytes) {
+      const localSha = await gitBlobSha(localBytes);
+      different = localSha !== remote.sha;
     }
 
     if (different) {

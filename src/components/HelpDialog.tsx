@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Copy, X } from "lucide-react";
+import { Bot, Check, Copy, X } from "lucide-react";
 import { HtmlScrollbarArea } from "@/components/HtmlScrollbar";
 import { HelpExamplePair } from "@/components/HelpExamplePair";
 import { DialogPortal } from "@/components/ui/dialog-portal";
@@ -152,10 +152,6 @@ const copy = {
     help: "Help",
     title: "Quick Slides guide",
     close: "Close",
-    copied: "Copied!",
-    copyInstructions: "Copy instructions",
-    instructionsHint:
-      "Works with Claude, Codex, Cursor, ChatGPT, and other assistants — paste into chat or save as a project instructions file.",
     exampleMarkdown: "Example markdown",
     examplePreview: "Slide preview",
     loadSample: "Load sample document",
@@ -170,9 +166,50 @@ const copy = {
         title: "Present",
         body: "Click Present to enter fullscreen slideshow mode. Use arrow keys or Space to advance, Esc to exit.",
       },
-      instructions: {
-        title: "AI instructions",
-        body: "Copy the block below and give it to any AI assistant when you want slide decks — or a GitHub repository with quick-slides.json — written for Quick Slides.",
+      download: {
+        title: "Download",
+        body: "Use Download in the slides panel. There are three export formats:",
+        items: [
+          {
+            name: "PDF (selectable text)",
+            detail:
+              "Server-printed text PDF — sharp type you can select and search. Requires GitHub sign-in and uses your weekly quota.",
+          },
+          {
+            name: "PDF (image)",
+            detail:
+              "Each slide rasterized as an image. Works offline; no selectable-text quota.",
+          },
+          {
+            name: "HTML (presentation)",
+            detail:
+              "Standalone browser slideshow you can open locally or host anywhere.",
+          },
+        ],
+      },
+      plans: {
+        title: "Plans & quotas",
+        body: "Plans apply to selectable-text PDF exports (per calendar week). Image PDF and HTML stay available regardless of plan. Guests can use image PDF and HTML only.",
+        items: [
+          {
+            name: "Free",
+            detail: "3 selectable PDFs per week after GitHub sign-in.",
+          },
+          {
+            name: "Premium",
+            detail:
+              "15 selectable PDFs per week. Request from Download when your free quota is used.",
+          },
+          {
+            name: "Pro",
+            detail: "40 selectable PDFs per week.",
+          },
+          {
+            name: "Admin",
+            detail: "Unlimited selectable PDFs (internal).",
+          },
+        ],
+        note: "A shared monthly server capacity may also limit selectable exports for non-admin users when the service is busy.",
       },
     },
   },
@@ -180,10 +217,6 @@ const copy = {
     help: "帮助",
     title: "Quick Slides 指南",
     close: "关闭",
-    copied: "已复制！",
-    copyInstructions: "复制说明",
-    instructionsHint:
-      "适用于 Claude、Codex、Cursor、ChatGPT 等助手 — 粘贴到对话中，或保存为项目说明文件。",
     exampleMarkdown: "示例 Markdown",
     examplePreview: "幻灯片预览",
     loadSample: "加载示例文档",
@@ -197,11 +230,70 @@ const copy = {
         title: "演示",
         body: "点击「演示」进入全屏放映。方向键或空格翻页，Esc 退出。",
       },
-      instructions: {
-        title: "AI 说明",
-        body: "复制下方内容，交给任意 AI 助手，即可按 Quick Slides 规则生成幻灯片，或搭建带 quick-slides.json 的 GitHub 仓库。",
+      download: {
+        title: "下载",
+        body: "在幻灯片面板点击「下载」。共有三种导出格式：",
+        items: [
+          {
+            name: "PDF（可选中文字）",
+            detail:
+              "服务端打印的文字 PDF，清晰、可选中搜索。需 GitHub 登录，并占用每周配额。",
+          },
+          {
+            name: "PDF（图片）",
+            detail: "将每页渲染为图片。可离线使用，不占用可选中文字配额。",
+          },
+          {
+            name: "HTML（演示模式）",
+            detail: "独立浏览器演示页，可本地打开或自行托管。",
+          },
+        ],
+      },
+      plans: {
+        title: "方案与配额",
+        body: "方案仅限制「可选中文字」PDF（按自然周）。图片 PDF 与 HTML 不受方案限制。未登录访客只能使用图片 PDF 与 HTML。",
+        items: [
+          {
+            name: "Free（免费）",
+            detail: "登录 GitHub 后，每周 3 次可选中文字 PDF。",
+          },
+          {
+            name: "Premium（高级）",
+            detail: "每周 15 次。免费配额用尽后可在下载面板申请。",
+          },
+          {
+            name: "Pro",
+            detail: "每周 40 次可选中文字 PDF。",
+          },
+          {
+            name: "Admin（管理员）",
+            detail: "可选中文字 PDF 无限制（内部）。",
+          },
+        ],
+        note: "非管理员用户在服务繁忙时，还可能受每月共享服务端容量限制。",
       },
     },
+  },
+} as const;
+
+const aiCopy = {
+  en: {
+    label: "AI instructions",
+    title: "AI agent skill",
+    close: "Close",
+    copied: "Copied!",
+    copyInstructions: "Copy instructions",
+    body: "Give this skill to your coding agent (Cursor, Claude Code, Codex, ChatGPT, etc.) so it formats the repository correctly — markdown slides, quick-slides.json, images/, and Git layout.",
+    hint: "Paste into chat, save as SKILL.md / AGENTS.md / project instructions, or attach as a custom skill.",
+  },
+  zh: {
+    label: "AI 说明",
+    title: "AI 智能体技能",
+    close: "关闭",
+    copied: "已复制！",
+    copyInstructions: "复制说明",
+    body: "把这份技能交给你的编程智能体（Cursor、Claude Code、Codex、ChatGPT 等），即可按规范整理仓库 —— Markdown 幻灯片、quick-slides.json、images/ 与 Git 目录结构。",
+    hint: "可粘贴到对话、保存为 SKILL.md / AGENTS.md / 项目说明，或添加为自定义技能。",
   },
 } as const;
 
@@ -220,7 +312,6 @@ export function HelpDialog({
 }: HelpDialogProps) {
   const language = useLanguage();
   const t = copy[language];
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -233,10 +324,6 @@ export function HelpDialog({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
-  useEffect(() => {
-    if (!open) setCopied(false);
-  }, [open]);
-
   if (!open) return null;
 
   const handleLoadSample = () => {
@@ -245,16 +332,6 @@ export function HelpDialog({
     }
     onLoadSample();
     onClose();
-  };
-
-  const handleCopyInstructions = async () => {
-    try {
-      await navigator.clipboard.writeText(QUICK_SLIDES_AI_INSTRUCTIONS);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
   };
 
   return (
@@ -326,21 +403,130 @@ export function HelpDialog({
               </section>
 
               <section>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="font-semibold">{t.sections.instructions.title}</h3>
-                  <Button variant="outline" size="sm" onClick={handleCopyInstructions}>
-                    {copied ? <Check className="text-green-600" /> : <Copy />}
-                    {copied ? t.copied : t.copyInstructions}
-                  </Button>
-                </div>
-                <p className="mt-1 text-muted-foreground">
-                  {t.sections.instructions.body}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">{t.instructionsHint}</p>
-                <pre className="glass-panel mt-3 max-h-64 overflow-auto rounded-lg border p-3 font-mono text-xs leading-relaxed">
-                  {QUICK_SLIDES_AI_INSTRUCTIONS}
-                </pre>
+                <h3 className="font-semibold">{t.sections.download.title}</h3>
+                <p className="mt-1 text-muted-foreground">{t.sections.download.body}</p>
+                <ul className="mt-2 list-disc space-y-2 pl-5 text-muted-foreground">
+                  {t.sections.download.items.map((item) => (
+                    <li key={item.name}>
+                      <span className="font-medium text-foreground">{item.name}</span>
+                      {" — "}
+                      {item.detail}
+                    </li>
+                  ))}
+                </ul>
               </section>
+
+              <section>
+                <h3 className="font-semibold">{t.sections.plans.title}</h3>
+                <p className="mt-1 text-muted-foreground">{t.sections.plans.body}</p>
+                <ul className="mt-2 list-disc space-y-2 pl-5 text-muted-foreground">
+                  {t.sections.plans.items.map((item) => (
+                    <li key={item.name}>
+                      <span className="font-medium text-foreground">{item.name}</span>
+                      {" — "}
+                      {item.detail}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {t.sections.plans.note}
+                </p>
+              </section>
+            </div>
+          </HtmlScrollbarArea>
+
+          <div className="glass-divider relative z-[1] flex shrink-0 justify-end border-t px-5 py-4">
+            <Button onClick={onClose}>{t.close}</Button>
+          </div>
+        </div>
+      </div>
+    </DialogPortal>
+  );
+}
+
+type AiInstructionsDialogProps = {
+  open: boolean;
+  onClose: () => void;
+};
+
+function AiInstructionsDialog({ open, onClose }: AiInstructionsDialogProps) {
+  const language = useLanguage();
+  const t = aiCopy[language];
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open) setCopied(false);
+  }, [open]);
+
+  if (!open) return null;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(QUICK_SLIDES_AI_INSTRUCTIONS);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <DialogPortal>
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-[3px]"
+        onClick={onClose}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="quick-slides-ai-title"
+          className="glass-panel glass-panel-dialog flex h-[min(90vh,720px)] max-h-[min(90vh,720px)] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-xl border shadow-lg"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="glass-divider relative z-[1] flex shrink-0 items-center justify-between gap-3 border-b px-5 py-4">
+            <div className="flex min-w-0 items-center gap-2">
+              <Bot className="size-5 shrink-0 text-foreground" aria-hidden />
+              <h2 id="quick-slides-ai-title" className="truncate text-lg font-bold">
+                {t.title}
+              </h2>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              aria-label={t.close}
+              title={t.close}
+            >
+              <X />
+            </Button>
+          </div>
+
+          <HtmlScrollbarArea
+            className="relative z-[1] flex-1"
+            contentClassName="px-5 py-4"
+            refreshToken={language}
+          >
+            <div className="space-y-3 text-sm leading-relaxed">
+              <p className="text-muted-foreground">{t.body}</p>
+              <p className="text-xs text-muted-foreground">{t.hint}</p>
+              <div className="flex justify-end">
+                <Button variant="outline" size="sm" onClick={() => void handleCopy()}>
+                  {copied ? <Check className="text-green-600" /> : <Copy />}
+                  {copied ? t.copied : t.copyInstructions}
+                </Button>
+              </div>
+              <pre className="glass-panel max-h-[min(55vh,480px)] overflow-auto rounded-lg border p-3 font-mono text-xs leading-relaxed">
+                {QUICK_SLIDES_AI_INSTRUCTIONS}
+              </pre>
             </div>
           </HtmlScrollbarArea>
 
@@ -381,6 +567,28 @@ export function HelpButton({ onLoadSample, hasEditorContent }: HelpButtonProps) 
         onLoadSample={onLoadSample}
         hasEditorContent={hasEditorContent}
       />
+    </>
+  );
+}
+
+export function AiInstructionsButton() {
+  const language = useLanguage();
+  const t = aiCopy[language];
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="icon"
+        aria-label={t.label}
+        title={t.label}
+        onClick={() => setOpen(true)}
+        className="slide-locate-btn glass-toolbar-action"
+      >
+        <Bot className="size-4" aria-hidden />
+      </Button>
+      <AiInstructionsDialog open={open} onClose={() => setOpen(false)} />
     </>
   );
 }

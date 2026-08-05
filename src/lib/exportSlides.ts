@@ -599,7 +599,20 @@ function getConvexExportPdfUrl(): string | null {
   return null;
 }
 
-async function renderPdfViaConvexBackend(html: string): Promise<Blob> {
+export class SelectablePdfEntitlementError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "SelectablePdfEntitlementError";
+    this.code = code;
+  }
+}
+
+async function renderPdfViaConvexBackend(
+  html: string,
+  githubToken: string,
+): Promise<Blob> {
   const endpoint = getConvexExportPdfUrl();
   if (!endpoint) {
     throw new Error("PDF_BACKEND_NOT_CONFIGURED");
@@ -616,6 +629,7 @@ async function renderPdfViaConvexBackend(html: string): Promise<Blob> {
       headers: {
         "Content-Type": "application/json",
         Accept: "application/pdf",
+        Authorization: `Bearer ${githubToken}`,
       },
       body: JSON.stringify({ html }),
       signal: controller.signal,
@@ -638,15 +652,20 @@ async function renderPdfViaConvexBackend(html: string): Promise<Blob> {
   }
 
   if (!response.ok) {
+    let code = `http_${response.status}`;
     let detail = `PDF export failed (${response.status})`;
     try {
       const json = (await response.json()) as {
         error_description?: string;
         error?: string;
       };
+      code = json.error || code;
       detail = json.error_description || json.error || detail;
     } catch {
       // ignore
+    }
+    if (response.status === 401 || response.status === 403) {
+      throw new SelectablePdfEntitlementError(code, detail);
     }
     throw new Error(detail);
   }
@@ -660,7 +679,8 @@ async function renderPdfViaConvexBackend(html: string): Promise<Blob> {
 
 /**
  * Selectable-text PDF via Convex → Browserless (tight 1280×720, no print chrome).
- * Sized for free-tier limits; falls back to image PDF when too large or backend fails.
+ * Requires a GitHub token (quota-gated). Technical size/timeout failures fall back
+ * to image PDF; entitlement denials throw SelectablePdfEntitlementError.
  */
 export async function downloadSlidesPdf(
   markdown: string,
@@ -669,6 +689,7 @@ export async function downloadSlidesPdf(
   filename: string,
   deckHandle: FileSystemDirectoryHandle | null = null,
   deckId: string | null = null,
+  githubToken?: string | null,
 ): Promise<void> {
   const language = getLanguage();
   const exportBasename = getExportBasename(filename, language);
@@ -676,6 +697,14 @@ export async function downloadSlidesPdf(
   const exportImages: ExportImageOptions = { deckHandle, deckId };
   const slideCount = splitSlides(markdown).length;
   const slideFragments: string[] = [];
+  const token = githubToken?.trim() ?? "";
+
+  if (!token) {
+    throw new SelectablePdfEntitlementError(
+      "unauthorized",
+      "Sign in with GitHub to download selectable-text PDF.",
+    );
+  }
 
   const useImageFallback = async (reason: string) => {
     console.warn(`${reason}; using image PDF instead.`);
@@ -736,9 +765,12 @@ export async function downloadSlidesPdf(
     }
 
     try {
-      const pdfBlob = await renderPdfViaConvexBackend(html);
+      const pdfBlob = await renderPdfViaConvexBackend(html, token);
       downloadBlob(pdfBlob, `${exportBasename}.pdf`);
     } catch (error) {
+      if (error instanceof SelectablePdfEntitlementError) {
+        throw error;
+      }
       console.warn("Selectable PDF backend failed; using image PDF.", error);
       await downloadSlidesPdfImage(
         markdown,

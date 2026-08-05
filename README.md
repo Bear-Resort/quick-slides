@@ -130,13 +130,13 @@ The production build sets `GITHUB_PAGES=true` so assets are served under the `/q
 
 ## PDF export (how it works)
 
-**PDF (selectable text)** posts print-ready HTML to Convex `/export-pdf` → Browserless Chrome prints a clean 1280×720 PDF (selectable text/math, no browser print headers). Requires:
+**PDF (selectable text)** posts print-ready HTML to Convex `/export-pdf` → Browserless Chrome prints a clean 1280×720 PDF (selectable text/math, no browser print headers). Requires GitHub sign-in and a weekly quota (`free` 3 / `premium` 15 / `pro` 40 / `admin` unlimited; global monthly safety cap 400 for non-admin). Image PDF and HTML stay client-side and unlimited.
 
 ```bash
 npx convex env set BROWSERLESS_API_TOKEN <token>
 ```
 
-and `VITE_CONVEX_SITE_URL` in `.env.local`. Tuned for Browserless **free tier** (short session, small payload, ≤25 slides / ~1.4MB HTML); larger decks fall back to the image path.
+Also set `VITE_CONVEX_URL` and `VITE_CONVEX_SITE_URL` in `.env.local`. Tuned for Browserless **free tier** (short session, small payload, ≤25 slides / ~1.4MB HTML); larger decks fall back to the image path. Admin: `/admin/exports` (GitHub `James-Guo-03` only).
 
 **PDF (image)** uses **html2canvas-pro** + **jsPDF** (silent download; not selectable).
 

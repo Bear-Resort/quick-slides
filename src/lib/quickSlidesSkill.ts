@@ -46,15 +46,11 @@ Always write valid JSON. Minimal example:
 {
   "version": 1,
   "title": "My Talk",
-  "slideTheme": "regular",
-  "slideColorMode": "light",
-  "style": { "theme": "regular", "colorMode": "light" },
   "fileStyles": {
     "deck.md": { "theme": "regular", "colorMode": "light" }
   },
   "entryFile": "deck.md",
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "updatedAt": "2026-01-01T00:00:00.000Z"
+  "createdAt": "2026-01-01T00:00:00.000Z"
 }
 \`\`\`
 
@@ -65,10 +61,8 @@ Field rules:
 | \`version\` | yes | Format version — use \`1\` |
 | \`title\` | yes | Presentation title (export filenames, library list) |
 | \`entryFile\` | yes | Markdown path used for preview/export (e.g. \`deck.md\`) |
-| \`style\` | yes | Default theme for the entry file: \`{ "theme", "colorMode" }\` |
-| \`slideTheme\` / \`slideColorMode\` | yes | Same as \`style\` (kept in sync for older readers) |
 | \`fileStyles\` | yes | Per-\`.md\`-file themes, keyed by path relative to repo root |
-| \`createdAt\` / \`updatedAt\` | yes | ISO-8601 timestamps |
+| \`createdAt\` | yes | ISO-8601 creation time (push commits record updates) |
 
 **Theme ids:** \`regular\`, \`gray\`, \`blue\`, \`red\`, \`green\`, \`purple\`, \`bear-academy\`, \`the-beauties\`
 
@@ -83,7 +77,7 @@ Field rules:
 }
 \`\`\`
 
-When you add a new \`.md\` file, add a matching \`fileStyles\` entry (or Quick Slides will fall back to the default \`style\`). When you rename a \`.md\` file, rename the key in \`fileStyles\` and update \`entryFile\` if needed.
+When you add a new \`.md\` file, add a matching \`fileStyles\` entry (or Quick Slides will fall back to the entry file’s style). When you rename a \`.md\` file, rename the key in \`fileStyles\` and update \`entryFile\` if needed.
 
 Images in markdown should use relative paths under \`images/\`, for example \`![Alt](images/diagram.png)\`.
 
@@ -207,7 +201,7 @@ Brief caption on the left.
 4. Keep slides concise; split long content across multiple slides.
 5. Put at most one image per slide; keep explanatory text on the left.
 6. Use display math (\`$$\`) for important equations; inline math (\`$\`) for short expressions.
-7. When scaffolding a GitHub (or library) deck, always include \`quick-slides.json\` with \`title\`, \`entryFile\`, \`style\`, and \`fileStyles\` for every \`.md\` deck file.
+7. When scaffolding a GitHub (or library) deck, always include \`quick-slides.json\` with \`title\`, \`entryFile\`, and \`fileStyles\` for every \`.md\` deck file.
 8. One theme per \`.md\` file (via \`fileStyles\`); do not invent per-slide theme fields.
 9. Output only the markdown deck (and \`quick-slides.json\` when asked to set up a repo) unless the user asks for commentary.
 `;

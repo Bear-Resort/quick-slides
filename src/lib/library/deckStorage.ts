@@ -3,9 +3,11 @@ import {
   DECK_IMAGES_DIR,
   DECK_MARKDOWN_FILE,
   DECK_META_FILE,
+  defaultFileStyle,
   generateDeckFolderName,
   metadataToIndexEntry,
   parseDeckMetadata,
+  serializeDeckMetadata,
   withDeckStyle,
   type DeckMetadata,
   type LibraryIndexEntry,
@@ -54,6 +56,8 @@ export async function connectLibraryRoot(
     const granted = await ensureReadWritePermission(handle);
     if (!granted) return false;
   }
+  const { purgeCrswapFiles } = await import("@/lib/github/workingTree");
+  await purgeCrswapFiles(handle);
   await saveLibraryRootHandle(handle);
   setLibraryPreference(preference);
   return true;
@@ -106,7 +110,7 @@ export async function createDeck(
   const markdown = `# ${normalizedTitle}\n\n---\n\n### First slide\n\n`;
 
   await writeTextFile(handle, DECK_MARKDOWN_FILE, markdown);
-  await writeJsonFile(handle, DECK_META_FILE, metadata);
+  await writeJsonFile(handle, DECK_META_FILE, serializeDeckMetadata(metadata));
 
   const now = new Date().toISOString();
   await upsertLibraryIndexEntry(
@@ -122,6 +126,9 @@ export async function loadDeck(
 ): Promise<LoadedDeck | null> {
   const handle = await getDeckDirectory(root, folderName);
   if (!handle) return null;
+
+  const { purgeCrswapFiles } = await import("@/lib/github/workingTree");
+  await purgeCrswapFiles(handle);
 
   const rawMeta = await readJsonFile<unknown>(handle, DECK_META_FILE);
   const metadata = parseDeckMetadata(rawMeta);
@@ -146,19 +153,21 @@ export async function saveDeck(
   metadata: DeckMetadata,
 ): Promise<DeckMetadata> {
   const entryFile = metadata.entryFile || DECK_MARKDOWN_FILE;
-  const updated = withDeckStyle(
-    {
-      ...metadata,
-      entryFile,
-      updatedAt: new Date().toISOString(),
+  const updated: DeckMetadata = {
+    ...metadata,
+    entryFile,
+    fileStyles: {
+      ...(metadata.fileStyles ?? {}),
+      [entryFile]:
+        metadata.fileStyles?.[entryFile] ?? defaultFileStyle(metadata),
     },
-    metadata.slideTheme,
-    metadata.slideColorMode,
-  );
+  };
 
   await writeTextFile(handle, entryFile, markdown);
-  await writeJsonFile(handle, DECK_META_FILE, updated);
-  await upsertLibraryIndexEntry(metadataToIndexEntry(folderName, updated));
+  await writeJsonFile(handle, DECK_META_FILE, serializeDeckMetadata(updated));
+  await upsertLibraryIndexEntry(
+    metadataToIndexEntry(folderName, updated, new Date().toISOString()),
+  );
 
   return updated;
 }
@@ -213,5 +222,11 @@ export async function saveDeckTheme(
   metadata: DeckMetadata,
   slideTheme: SlideThemeId,
 ): Promise<DeckMetadata> {
-  return saveDeck(handle, folderName, markdown, { ...metadata, slideTheme });
+  const colorMode = defaultFileStyle(metadata).colorMode;
+  return saveDeck(
+    handle,
+    folderName,
+    markdown,
+    withDeckStyle(metadata, slideTheme, colorMode),
+  );
 }

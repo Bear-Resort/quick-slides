@@ -8,18 +8,25 @@
  * Optional:
  *   BROWSERLESS_PDF_URL=https://production-sfo.browserless.io/pdf
  *
- * Client: POST { html: string } → application/pdf
+ * Client: POST { html: string } with Authorization: Bearer <github_token>
+ * → application/pdf (quota-gated; image/HTML exports stay client-side)
  * Uses VITE_CONVEX_SITE_URL + /export-pdf
  */
 import { httpRouter } from "convex/server";
+import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
+import {
+  bearerFromAuthorizationHeader,
+  verifyGithubToken,
+} from "./lib/githubAuth";
 
 const http = httpRouter();
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Accept",
+  "Access-Control-Allow-Headers":
+    "Content-Type, Accept, Authorization",
   "Access-Control-Max-Age": "86400",
 };
 
@@ -125,7 +132,28 @@ http.route({
 http.route({
   path: "/export-pdf",
   method: "POST",
-  handler: httpAction(async (_ctx, request) => {
+  handler: httpAction(async (ctx, request) => {
+    const githubToken = bearerFromAuthorizationHeader(
+      request.headers.get("Authorization"),
+    );
+    const identity = await verifyGithubToken(githubToken);
+    if (!identity) {
+      return new Response(
+        JSON.stringify({
+          error: "unauthorized",
+          error_description:
+            "Sign in with GitHub to download selectable-text PDF.",
+        }),
+        {
+          status: 401,
+          headers: {
+            ...CORS_HEADERS,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    }
+
     const token = process.env.BROWSERLESS_API_TOKEN?.trim();
     if (!token) {
       return new Response(
@@ -195,6 +223,31 @@ http.route({
         }),
         {
           status: 413,
+          headers: {
+            ...CORS_HEADERS,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    }
+
+    const quota = await ctx.runMutation(
+      internal.exportAccess.consumeSelectableExport,
+      {
+        githubLogin: identity.login,
+        githubId: identity.id,
+        now: Date.now(),
+      },
+    );
+    if (!quota.ok) {
+      return new Response(
+        JSON.stringify({
+          error: quota.error ?? "quota_exceeded",
+          error_description:
+            quota.reason ?? "Selectable PDF quota exceeded.",
+        }),
+        {
+          status: 403,
           headers: {
             ...CORS_HEADERS,
             "Content-Type": "application/json",

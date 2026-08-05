@@ -14,6 +14,7 @@ import type { SaveStatus } from "@/components/EditorDocumentHeader";
 import { SlideDeck, type SlideDeckHandle } from "@/components/SlideDeck";
 import { SlidePresenter } from "@/components/SlidePresenter";
 import { StyleSelector } from "@/components/StyleSelector";
+import { ImagePreviewDialog } from "@/components/ImagePreviewDialog";
 import { DialogPortal } from "@/components/ui/dialog-portal";
 import { DeckProvider } from "@/context/DeckContext";
 import { getSlideNavigation } from "@/lib/slideMarkers";
@@ -38,16 +39,18 @@ import {
   saveDeck,
 } from "@/lib/library/deckStorage";
 import { bootstrapLibrary } from "@/lib/library/libraryBootstrap";
-import { getDeckGithubLink, formatDeckGithubLinkLabel, type PulledDeck } from "@/lib/github/deckSync";
+import { getDeckGithubLink, formatDeckGithubLinkLabel, type PulledDeck, formatContentUpdateMessage, pushDeckToGithub, PushConflictError } from "@/lib/github/deckSync";
 import { computeLineChanges, type ScmLineChange } from "@/lib/github/lineDiff";
 import { getRemoteText, computeScmChanges, revertFileFromRemote, type FileScmKind } from "@/lib/github/scmStatus";
-import { stagePath, unstagePath } from "@/lib/github/staging";
+import { clearStaged, stagePath, unstagePath } from "@/lib/github/staging";
 import {
   createRepoFile,
   createRepoFolder,
+  isImagePath,
   isTextPath,
   listRepoFileTree,
   readRepoTextFile,
+  removeRepoPath,
   renameRepoPath,
   writeRepoTextFile,
   type RepoFileEntry,
@@ -157,11 +160,14 @@ export function Editor() {
   const [activeFilePath, setActiveFilePath] = useState(DECK_MARKDOWN_FILE);
   const [fileTree, setFileTree] = useState<RepoFileEntry[]>([]);
   const [scmByPath, setScmByPath] = useState<Record<string, FileScmKind>>({});
+  const [hasScmChanges, setHasScmChanges] = useState(false);
   const [scmLineChanges, setScmLineChanges] = useState<ScmLineChange[]>([]);
   const [scmEpoch, setScmEpoch] = useState(0);
   const [auxFileText, setAuxFileText] = useState("");
   const [jsonUnlocked, setJsonUnlocked] = useState(false);
   const [jsonUnlockOpen, setJsonUnlockOpen] = useState(false);
+  const [imagePreviewPath, setImagePreviewPath] = useState<string | null>(null);
+  const [quickPushBusy, setQuickPushBusy] = useState(false);
   const isLinked = Boolean(deckId && getDeckGithubLink(deckId));
   const editingMarkdown = isMarkdownPath(activeFilePath);
   const isJsonFile = activeFilePath.toLowerCase().endsWith(".json");
@@ -363,6 +369,7 @@ export function Editor() {
     if (!deckHandle || !deckId || !getDeckGithubLink(deckId)) {
       setFileTree([]);
       setScmByPath({});
+      setHasScmChanges(false);
       return;
     }
     try {
@@ -374,8 +381,8 @@ export function Editor() {
         deckHandle,
         staged: getStagedPaths(deckId),
       });
-      void changes;
       setScmByPath(nextScm);
+      setHasScmChanges(changes.length > 0);
     } catch {
       // ignore transient FS/API errors
     }
@@ -493,6 +500,10 @@ export function Editor() {
     async (path: string) => {
       if (!deckHandle) return;
       await flushSave();
+      if (isImagePath(path)) {
+        setImagePreviewPath(path);
+        return;
+      }
       setActiveFilePath(path);
       setJsonUnlocked(false);
       setJsonUnlockOpen(false);
@@ -590,6 +601,91 @@ export function Editor() {
     },
     [deckHandle, activeFilePath],
   );
+
+  const handleDeleteFile = useCallback(
+    async (path: string) => {
+      if (!deckHandle) return;
+      const label = path;
+      if (
+        !window.confirm(
+          `Delete “${label}”? This cannot be undone locally. Missing references may break the deck.`,
+        )
+      ) {
+        return;
+      }
+      try {
+        await removeRepoPath(deckHandle, path);
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : String(err));
+        return;
+      }
+      if (deckId) unstagePath(deckId, path);
+
+      const meta = metadataRef.current;
+      if (meta) {
+        const fileStyles = { ...(meta.fileStyles ?? {}) };
+        let changed = false;
+        for (const key of Object.keys(fileStyles)) {
+          if (key === path || key.startsWith(`${path}/`)) {
+            delete fileStyles[key];
+            changed = true;
+          }
+        }
+        let nextEntry = meta.entryFile;
+        if (meta.entryFile === path || meta.entryFile.startsWith(`${path}/`)) {
+          nextEntry = DECK_MARKDOWN_FILE;
+          changed = true;
+        }
+        if (changed) {
+          const nextMeta: DeckMetadata = {
+            ...meta,
+            fileStyles,
+            entryFile: nextEntry,
+          };
+          setMetadata(nextMeta);
+          metadataRef.current = nextMeta;
+        }
+      }
+
+      if (activeFilePath === path || activeFilePath.startsWith(`${path}/`)) {
+        const fallback =
+          metadataRef.current?.entryFile || DECK_MARKDOWN_FILE;
+        setActiveFilePath(fallback);
+        const text = (await readRepoTextFile(deckHandle, fallback)) ?? "";
+        skipNextAutosaveRef.current = true;
+        setMarkdown(text);
+        setAuxFileText("");
+      }
+      setScmEpoch((n) => n + 1);
+    },
+    [deckHandle, deckId, activeFilePath],
+  );
+
+  const handleQuickPush = useCallback(async () => {
+    if (!deckId || !deckHandle || !getDeckGithubLink(deckId)) return;
+    setQuickPushBusy(true);
+    try {
+      await flushSave();
+      const commitMessage = formatContentUpdateMessage();
+      await pushDeckToGithub({
+        deckId,
+        deckHandle,
+        message: commitMessage,
+      });
+      clearStaged(deckId);
+      setScmEpoch((n) => n + 1);
+    } catch (err) {
+      const message =
+        err instanceof PushConflictError
+          ? `${err.message}\n\nPull first, or force-push from the Git panel.`
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      window.alert(message);
+    } finally {
+      setQuickPushBusy(false);
+    }
+  }, [deckId, deckHandle, flushSave]);
 
   const handleIncludeFile = useCallback(
     async (path: string) => {
@@ -931,6 +1027,10 @@ export function Editor() {
               setWorkspacePanel((current) =>
                 current === "github" ? null : "github",
               ),
+            onQuickPush: () => void handleQuickPush(),
+            quickPushBusy,
+            canQuickPush: isLinked && Boolean(deckHandle) && hasScmChanges,
+            quickPushClean: isLinked && Boolean(deckHandle) && !hasScmChanges,
             onUndo: () => editorRef.current?.undo(),
             onRedo: () => editorRef.current?.redo(),
             canUndo: editorHistory.canUndo,
@@ -952,6 +1052,7 @@ export function Editor() {
           onNewFile={(parent) => void handleNewFile(parent)}
           onNewFolder={(parent) => void handleNewFolder(parent)}
           onRenameFile={(path) => void handleRenameFile(path)}
+          onDeleteFile={(path) => void handleDeleteFile(path)}
           onIncludeFile={(path) => void handleIncludeFile(path)}
           onRevertFile={(path) => void handleRevertFile(path)}
           onDeckDeleted={(deletedId) => {
@@ -1085,6 +1186,13 @@ export function Editor() {
           />
         )}
 
+        <ImagePreviewDialog
+          open={imagePreviewPath !== null}
+          path={imagePreviewPath}
+          deckHandle={deckHandle}
+          onClose={() => setImagePreviewPath(null)}
+        />
+
         {jsonUnlockOpen ? (
           <DialogPortal>
             <div
@@ -1109,7 +1217,7 @@ export function Editor() {
                 </p>
                 {activeFilePath === DECK_META_FILE ? (
                   <p className="mt-2 font-mono text-[11px] text-muted-foreground">
-                    {DECK_META_FILE} · fileStyles / style
+                    {DECK_META_FILE} · fileStyles
                   </p>
                 ) : null}
                 <div className="mt-4 flex justify-end gap-2">

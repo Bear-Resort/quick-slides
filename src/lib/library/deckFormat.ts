@@ -19,14 +19,6 @@ export type DeckMetadata = {
   version: typeof DECK_FORMAT_VERSION;
   title: string;
   /**
-   * Default / entry-file theme (kept in sync with fileStyles[entryFile]).
-   * Older decks may only have these fields.
-   */
-  slideTheme: SlideThemeId;
-  slideColorMode: SlideColorMode;
-  /** Same as default slideTheme / slideColorMode (kept in sync on write). */
-  style: FileStyle;
-  /**
    * Per-markdown-file styles, keyed by path relative to the deck root
    * (e.g. `"deck.md"`, `"talks/intro.md"`).
    */
@@ -34,13 +26,13 @@ export type DeckMetadata = {
   /** Markdown file used for slide preview / export (last opened .md). */
   entryFile: string;
   createdAt: string;
-  updatedAt: string;
 };
 
 export type LibraryIndexEntry = {
   folderName: string;
   title: string;
   createdAt: string;
+  /** Local library index only — not stored in quick-slides.json. */
   updatedAt: string;
   lastOpenedAt: string;
 };
@@ -78,20 +70,21 @@ export function createFileStyle(
 /** @deprecated Use createFileStyle. */
 export const createSlideStyle = createFileStyle;
 
+/** Style for the entry markdown file (fallback: regular / light). */
 export function defaultFileStyle(
-  metadata: Pick<DeckMetadata, "slideTheme" | "slideColorMode" | "style">,
+  metadata: Pick<DeckMetadata, "fileStyles" | "entryFile">,
 ): FileStyle {
+  const entryFile = metadata.entryFile || DECK_MARKDOWN_FILE;
+  const entry = metadata.fileStyles?.[entryFile];
+  if (!entry) return createFileStyle();
   return {
-    theme: metadata.style?.theme ?? metadata.slideTheme ?? "regular",
-    colorMode: metadata.style?.colorMode ?? metadata.slideColorMode ?? "light",
+    theme: isSlideThemeId(entry.theme) ? entry.theme : "regular",
+    colorMode: isSlideColorMode(entry.colorMode) ? entry.colorMode : "light",
   };
 }
 
 export function resolveFileStyle(
-  metadata: Pick<
-    DeckMetadata,
-    "slideTheme" | "slideColorMode" | "style" | "fileStyles" | "entryFile"
-  >,
+  metadata: Pick<DeckMetadata, "fileStyles" | "entryFile">,
   filePath: string,
 ): FileStyle {
   const fallback = defaultFileStyle(metadata);
@@ -104,7 +97,7 @@ export function resolveFileStyle(
   };
 }
 
-/** Set style for one markdown file; syncs top-level style when that file is the entry. */
+/** Set style for one markdown file. */
 export function withFileStyle(
   metadata: DeckMetadata,
   filePath: string,
@@ -113,67 +106,58 @@ export function withFileStyle(
 ): DeckMetadata {
   const path = normalizeRepoPath(filePath) || DECK_MARKDOWN_FILE;
   const style = createFileStyle(theme, colorMode);
-  const fileStyles = {
-    ...(metadata.fileStyles ?? {}),
-    [path]: style,
-  };
-  const entryFile = metadata.entryFile || DECK_MARKDOWN_FILE;
-  const syncTopLevel = path === entryFile;
-
   return {
     ...metadata,
-    fileStyles,
-    ...(syncTopLevel
-      ? {
-          slideTheme: theme,
-          slideColorMode: colorMode,
-          style,
-        }
-      : {
-          // Keep top-level aligned with entry file when present
-          ...(() => {
-            const entryStyle = fileStyles[entryFile] ?? defaultFileStyle(metadata);
-            return {
-              slideTheme: entryStyle.theme,
-              slideColorMode: entryStyle.colorMode,
-              style: entryStyle,
-            };
-          })(),
-        }),
+    fileStyles: {
+      ...(metadata.fileStyles ?? {}),
+      [path]: style,
+    },
   };
 }
 
 /**
- * Update top-level default style and the entry file's fileStyles entry.
+ * Update the entry file's style in fileStyles.
  * Prefer withFileStyle when you know which .md is being styled.
  */
 export function withDeckStyle(
   metadata: DeckMetadata,
-  slideTheme: SlideThemeId,
-  slideColorMode: SlideColorMode,
+  theme: SlideThemeId,
+  colorMode: SlideColorMode,
 ): DeckMetadata {
   const entryFile = metadata.entryFile || DECK_MARKDOWN_FILE;
-  return withFileStyle(metadata, entryFile, slideTheme, slideColorMode);
+  return withFileStyle(metadata, entryFile, theme, colorMode);
+}
+
+/** JSON shape written to quick-slides.json (no legacy duplicate fields). */
+export function serializeDeckMetadata(metadata: DeckMetadata): Record<string, unknown> {
+  const entryFile = metadata.entryFile || DECK_MARKDOWN_FILE;
+  const fileStyles = { ...(metadata.fileStyles ?? {}) };
+  if (!fileStyles[entryFile]) {
+    fileStyles[entryFile] = createFileStyle();
+  }
+  return {
+    version: DECK_FORMAT_VERSION,
+    title: metadata.title,
+    fileStyles,
+    entryFile,
+    createdAt: metadata.createdAt,
+  };
 }
 
 export function createDeckMetadata(
   title: string,
-  slideTheme: SlideThemeId = "regular",
-  slideColorMode: SlideColorMode = "light",
+  theme: SlideThemeId = "regular",
+  colorMode: SlideColorMode = "light",
 ): DeckMetadata {
   const now = new Date().toISOString();
-  const style = createFileStyle(slideTheme, slideColorMode);
+  const style = createFileStyle(theme, colorMode);
   return {
     version: DECK_FORMAT_VERSION,
     title,
-    slideTheme,
-    slideColorMode,
-    style,
     fileStyles: {
       [DECK_MARKDOWN_FILE]: style,
     },
     createdAt: now,
-    updatedAt: now,
     entryFile: DECK_MARKDOWN_FILE,
   };
 }
@@ -207,7 +191,6 @@ function parseFileStyles(
     }
   }
 
-  // Ensure entry file always has an explicit style entry after parse/write
   if (!result[entryFile]) {
     result[entryFile] = { ...fallback };
   }
@@ -215,11 +198,8 @@ function parseFileStyles(
   return result;
 }
 
-export function parseDeckMetadata(raw: unknown): DeckMetadata | null {
-  if (!raw || typeof raw !== "object") return null;
-  const record = raw as Record<string, unknown>;
-  const title = typeof record.title === "string" ? record.title.trim() : "";
-
+/** Resolve a default style from legacy top-level fields (slideTheme / style). */
+function legacyFallbackStyle(record: Record<string, unknown>): FileStyle {
   const styleRecord =
     record.style && typeof record.style === "object"
       ? (record.style as Record<string, unknown>)
@@ -234,43 +214,43 @@ export function parseDeckMetadata(raw: unknown): DeckMetadata | null {
       ? styleRecord.colorMode
       : null;
 
-  const slideTheme =
+  const theme =
     styleTheme ??
     (typeof record.slideTheme === "string" && isSlideThemeId(record.slideTheme)
       ? record.slideTheme
       : "regular");
-  const slideColorMode =
+  const colorMode =
     styleColorMode ??
     (typeof record.slideColorMode === "string" &&
     isSlideColorMode(record.slideColorMode)
       ? record.slideColorMode
       : "light");
-  const fallback = createFileStyle(slideTheme, slideColorMode);
+  return createFileStyle(theme, colorMode);
+}
+
+export function parseDeckMetadata(raw: unknown): DeckMetadata | null {
+  if (!raw || typeof raw !== "object") return null;
+  const record = raw as Record<string, unknown>;
+  const title = typeof record.title === "string" ? record.title.trim() : "";
+  if (!title) return null;
 
   const createdAt =
     typeof record.createdAt === "string" ? record.createdAt : new Date().toISOString();
-  const updatedAt =
-    typeof record.updatedAt === "string" ? record.updatedAt : createdAt;
   const entryFile =
     typeof record.entryFile === "string" &&
     record.entryFile.trim().toLowerCase().endsWith(".md")
       ? normalizeRepoPath(record.entryFile)
       : DECK_MARKDOWN_FILE;
 
+  const fallback = legacyFallbackStyle(record);
   const fileStyles = parseFileStyles(record.fileStyles, fallback, entryFile);
-
-  if (!title) return null;
 
   return {
     version: DECK_FORMAT_VERSION,
     title,
-    slideTheme,
-    slideColorMode,
-    style: fallback,
     fileStyles,
     entryFile,
     createdAt,
-    updatedAt,
   };
 }
 
@@ -279,12 +259,13 @@ export function metadataToIndexEntry(
   metadata: DeckMetadata,
   lastOpenedAt?: string,
 ): LibraryIndexEntry {
+  const touchedAt = lastOpenedAt ?? new Date().toISOString();
   return {
     folderName,
     title: metadata.title,
     createdAt: metadata.createdAt,
-    updatedAt: metadata.updatedAt,
-    lastOpenedAt: lastOpenedAt ?? metadata.updatedAt,
+    updatedAt: touchedAt,
+    lastOpenedAt: touchedAt,
   };
 }
 

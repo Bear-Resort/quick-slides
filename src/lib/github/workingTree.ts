@@ -15,6 +15,41 @@ export type RepoFileEntry = {
 
 const IGNORED_NAMES = new Set([".DS_Store", "Thumbs.db"]);
 
+/** Chromium download leftovers and other junk — never show or sync. */
+export function isIgnoredRepoName(name: string): boolean {
+  if (!name) return true;
+  if (IGNORED_NAMES.has(name) || name.startsWith(".")) return true;
+  if (name.toLowerCase().endsWith(".crswap")) return true;
+  return false;
+}
+
+/** Delete leftover `*.crswap` files under a directory tree. */
+export async function purgeCrswapFiles(
+  dir: FileSystemDirectoryHandle,
+): Promise<number> {
+  let removed = 0;
+  const pendingDirs: FileSystemDirectoryHandle[] = [dir];
+  while (pendingDirs.length > 0) {
+    const current = pendingDirs.pop()!;
+    for await (const [name, handle] of current.entries()) {
+      if (handle.kind === "directory") {
+        if (isIgnoredRepoName(name)) continue;
+        pendingDirs.push(handle as FileSystemDirectoryHandle);
+        continue;
+      }
+      if (name.toLowerCase().endsWith(".crswap")) {
+        try {
+          await current.removeEntry(name);
+          removed += 1;
+        } catch {
+          // ignore permission / race
+        }
+      }
+    }
+  }
+  return removed;
+}
+
 function splitPath(path: string): string[] {
   return path
     .replace(/\\/g, "/")
@@ -56,7 +91,15 @@ async function buildTree(
 ): Promise<RepoFileEntry[]> {
   const entries: RepoFileEntry[] = [];
   for await (const [name, handle] of dir.entries()) {
-    if (IGNORED_NAMES.has(name) || name.startsWith(".")) continue;
+    if (name.toLowerCase().endsWith(".crswap")) {
+      try {
+        await dir.removeEntry(name);
+      } catch {
+        // ignore
+      }
+      continue;
+    }
+    if (isIgnoredRepoName(name)) continue;
     const path = prefix ? `${prefix}/${name}` : name;
     if (handle.kind === "directory") {
       const dirHandle = handle as FileSystemDirectoryHandle;
@@ -77,6 +120,7 @@ async function buildTree(
 export async function listRepoFileTree(
   root: FileSystemDirectoryHandle,
 ): Promise<RepoFileEntry[]> {
+  await purgeCrswapFiles(root);
   return buildTree(root, "");
 }
 
@@ -116,6 +160,34 @@ export function isTextPath(path: string): boolean {
     lower.endsWith(".tsx") ||
     lower.endsWith(".jsx")
   );
+}
+
+export function isImagePath(path: string): boolean {
+  const lower = path.toLowerCase();
+  return (
+    lower.endsWith(".png") ||
+    lower.endsWith(".jpg") ||
+    lower.endsWith(".jpeg") ||
+    lower.endsWith(".gif") ||
+    lower.endsWith(".webp") ||
+    lower.endsWith(".bmp") ||
+    lower.endsWith(".avif") ||
+    lower.endsWith(".svg") ||
+    lower.endsWith(".ico")
+  );
+}
+
+/** Git blob SHA-1 (`blob <size>\\0` + bytes) — matches GitHub Contents `sha`. */
+export async function gitBlobSha(bytes: ArrayBuffer | Uint8Array): Promise<string> {
+  const body = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const header = new TextEncoder().encode(`blob ${body.byteLength}\0`);
+  const data = new Uint8Array(header.byteLength + body.byteLength);
+  data.set(header, 0);
+  data.set(body, header.byteLength);
+  const digest = await crypto.subtle.digest("SHA-1", data);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 export async function readRepoTextFile(

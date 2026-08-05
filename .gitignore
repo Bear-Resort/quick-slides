@@ -3,6 +3,7 @@ dist
 dist-ssr
 *.local
 .DS_Store
+*.crswap
 .claude
 .cursor/debug-*.log
 .env.local

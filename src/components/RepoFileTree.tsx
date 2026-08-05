@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent } from "react";
 import {
   ChevronRight,
   File,
+  FileImage,
   FileText,
   Folder,
   FolderOpen,
@@ -9,9 +10,10 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  Trash2,
 } from "lucide-react";
 import type { FileScmKind } from "@/lib/github/scmStatus";
-import type { RepoFileEntry } from "@/lib/github/workingTree";
+import { isImagePath, type RepoFileEntry } from "@/lib/github/workingTree";
 import { cn } from "@/lib/utils";
 
 type RepoFileTreeProps = {
@@ -19,6 +21,7 @@ type RepoFileTreeProps = {
   selectedPath?: string | null;
   onSelect: (path: string) => void;
   onRename?: (path: string) => void;
+  onDelete?: (path: string) => void;
   onNewFolder?: (parentPath: string) => void;
   onNewFile?: (parentPath: string) => void;
   scmByPath?: Record<string, FileScmKind>;
@@ -116,8 +119,9 @@ function Node({
     );
   }
 
-  const Icon =
-    entry.name.endsWith(".md") || entry.name.endsWith(".json")
+  const Icon = isImagePath(entry.path)
+    ? FileImage
+    : entry.name.endsWith(".md") || entry.name.endsWith(".json")
       ? FileText
       : File;
 
@@ -141,6 +145,7 @@ export function RepoFileTree({
   selectedPath,
   onSelect,
   onRename,
+  onDelete,
   onNewFolder,
   onNewFile,
   scmByPath,
@@ -246,6 +251,20 @@ export function RepoFileTree({
             >
               <Pencil className="size-3.5" />
               Rename…
+            </button>
+          ) : null}
+          {onDelete ? (
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-red-600 hover:bg-white/10 dark:text-red-400"
+              onClick={() => {
+                setMenu(null);
+                onDelete(menu.path);
+              }}
+            >
+              <Trash2 className="size-3.5" />
+              Delete…
             </button>
           ) : null}
           {!menu.isDir && menu.scm && onInclude ? (

@@ -3,6 +3,7 @@ import {
   DECK_MARKDOWN_FILE,
   DECK_META_FILE,
   parseDeckMetadata,
+  serializeDeckMetadata,
   type DeckMetadata,
 } from "@/lib/library/deckFormat";
 import {
@@ -134,40 +135,114 @@ async function listLocalImageNames(
   }
 }
 
+/** e.g. "Content update at 080526 1305" */
+export function formatContentUpdateMessage(date = new Date()): string {
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  const yy = String(date.getFullYear()).slice(-2);
+  const hh = String(date.getHours()).padStart(2, "0");
+  const min = String(date.getMinutes()).padStart(2, "0");
+  return `Content update at ${mm}${dd}${yy} ${hh}${min}`;
+}
+
+export class PushConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PushConflictError";
+  }
+}
+
+function looksLikeConflict(error: unknown): boolean {
+  const text = error instanceof Error ? error.message : String(error);
+  return /409|422|sha|does not match|conflict|not found|422/i.test(text);
+}
+
+async function putFileWithOptionalForce(options: {
+  owner: string;
+  repo: string;
+  path: string;
+  contentBase64: string;
+  message: string;
+  branch: string;
+  sha?: string;
+  force?: boolean;
+}): Promise<void> {
+  try {
+    await putFile({
+      owner: options.owner,
+      repo: options.repo,
+      path: options.path,
+      contentBase64: options.contentBase64,
+      message: options.message,
+      branch: options.branch,
+      sha: options.sha,
+    });
+  } catch (error) {
+    if (!options.force || !looksLikeConflict(error)) {
+      if (looksLikeConflict(error)) {
+        throw new PushConflictError(
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+      throw error;
+    }
+    const latest = await getFileContent(
+      options.owner,
+      options.repo,
+      options.path,
+      options.branch,
+    );
+    await putFile({
+      owner: options.owner,
+      repo: options.repo,
+      path: options.path,
+      contentBase64: options.contentBase64,
+      message: options.message,
+      branch: options.branch,
+      sha: latest?.sha,
+    });
+  }
+}
+
 export async function pushDeckToGithub(options: {
   deckId: string;
   deckHandle: FileSystemDirectoryHandle;
   message?: string;
   /** When set, only these relative paths are pushed (plus deletions for staged deletes). */
   paths?: string[];
+  /** Overwrite remote on SHA / conflict errors (keep local). */
+  force?: boolean;
 }): Promise<{ commitMessages: string[] }> {
   const link = getDeckGithubLink(options.deckId);
   if (!link) throw new Error("This presentation is not linked to a GitHub repository");
 
-  const message =
-    options.message?.trim() ||
-    `Update presentation (${new Date().toISOString()})`;
-
   const {
     isTextPath,
     listRepoFilePaths,
+    purgeCrswapFiles,
     readRepoFileBytes,
     readRepoTextFile,
   } = await import("@/lib/github/workingTree");
+  await purgeCrswapFiles(options.deckHandle);
+
+  const message =
+    options.message?.trim() || formatContentUpdateMessage();
+
   const { listRemoteDeckFiles } = await import("@/lib/github/scmStatus");
 
   const localPaths = options.paths?.length
-    ? options.paths
+    ? options.paths.filter((p) => !p.toLowerCase().endsWith(".crswap"))
     : await listRepoFilePaths(options.deckHandle);
   const remoteFiles = await listRemoteDeckFiles(link);
   const commits: string[] = [];
 
   for (const relative of localPaths) {
+    if (relative.toLowerCase().endsWith(".crswap")) continue;
     const path = remotePath(link, relative);
     if (isTextPath(relative)) {
       const text = (await readRepoTextFile(options.deckHandle, relative)) ?? "";
       const existing = await getFileContent(link.owner, link.repo, path, link.branch);
-      await putFile({
+      await putFileWithOptionalForce({
         owner: link.owner,
         repo: link.repo,
         path,
@@ -175,13 +250,14 @@ export async function pushDeckToGithub(options: {
         message,
         branch: link.branch,
         sha: existing?.sha,
+        force: options.force,
       });
       commits.push(path);
     } else {
       const buffer = await readRepoFileBytes(options.deckHandle, relative);
       if (!buffer) continue;
       const existing = await getFileContent(link.owner, link.repo, path, link.branch);
-      await putFile({
+      await putFileWithOptionalForce({
         owner: link.owner,
         repo: link.repo,
         path,
@@ -189,6 +265,7 @@ export async function pushDeckToGithub(options: {
         message,
         branch: link.branch,
         sha: existing?.sha,
+        force: options.force,
       });
       commits.push(path);
     }
@@ -198,15 +275,59 @@ export async function pushDeckToGithub(options: {
   // Only delete remotes when doing a full push (no path filter), matching prior image cleanup
   if (!options.paths) {
     for (const [relative, leftover] of remoteFiles) {
-      await deleteFile({
-        owner: link.owner,
-        repo: link.repo,
-        path: leftover.path,
-        message: `${message} (remove ${leftover.name})`,
-        branch: link.branch,
-        sha: leftover.sha,
-      });
-      commits.push(`delete:${leftover.path}`);
+      if (leftover.name.toLowerCase().endsWith(".crswap")) {
+        try {
+          await deleteFile({
+            owner: link.owner,
+            repo: link.repo,
+            path: leftover.path,
+            message: `${message} (remove ${leftover.name})`,
+            branch: link.branch,
+            sha: leftover.sha,
+          });
+        } catch {
+          // ignore remote crswap cleanup failures
+        }
+        remoteFiles.delete(relative);
+        continue;
+      }
+      try {
+        await deleteFile({
+          owner: link.owner,
+          repo: link.repo,
+          path: leftover.path,
+          message: `${message} (remove ${leftover.name})`,
+          branch: link.branch,
+          sha: leftover.sha,
+        });
+        commits.push(`delete:${leftover.path}`);
+      } catch (error) {
+        if (options.force && looksLikeConflict(error)) {
+          const latest = await getFileContent(
+            link.owner,
+            link.repo,
+            leftover.path,
+            link.branch,
+          );
+          if (latest?.sha) {
+            await deleteFile({
+              owner: link.owner,
+              repo: link.repo,
+              path: leftover.path,
+              message: `${message} (remove ${leftover.name})`,
+              branch: link.branch,
+              sha: latest.sha,
+            });
+            commits.push(`delete:${leftover.path}`);
+          }
+        } else if (looksLikeConflict(error)) {
+          throw new PushConflictError(
+            error instanceof Error ? error.message : String(error),
+          );
+        } else {
+          throw error;
+        }
+      }
       void relative;
     }
   } else {
@@ -271,7 +392,11 @@ export async function pullDeckFromGithub(options: {
   const markdown = decodeBase64ToText(mdFile.content);
 
   await writeTextFile(options.deckHandle, entryFile, markdown);
-  await writeJsonFile(options.deckHandle, DECK_META_FILE, metadata);
+  await writeJsonFile(
+    options.deckHandle,
+    DECK_META_FILE,
+    serializeDeckMetadata(metadata),
+  );
 
   const imagesDir = await ensureSubdirectory(options.deckHandle, DECK_IMAGES_DIR);
   const remoteImages = await listDirectory(

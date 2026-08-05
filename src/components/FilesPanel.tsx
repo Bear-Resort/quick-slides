@@ -140,6 +140,7 @@ type FilesPanelProps = {
   onNewFile?: (parentPath?: string) => void;
   onNewFolder?: (parentPath?: string) => void;
   onRenameFile?: (path: string) => void;
+  onDeleteFile?: (path: string) => void;
   onIncludeFile?: (path: string) => void;
   onRevertFile?: (path: string) => void;
   onDeckDeleted?: (deckId: string) => void;
@@ -161,6 +162,7 @@ export function FilesPanel({
   onNewFile,
   onNewFolder,
   onRenameFile,
+  onDeleteFile,
   onIncludeFile,
   onRevertFile,
   onDeckDeleted,
@@ -533,6 +535,7 @@ export function FilesPanel({
                 onClose();
               }}
               onRename={onRenameFile}
+              onDelete={onDeleteFile}
               onNewFile={(parent) => onNewFile?.(parent)}
               onNewFolder={(parent) => onNewFolder?.(parent)}
               onInclude={onIncludeFile}

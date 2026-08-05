@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { AdminExports } from "@/pages/AdminExports";
 import { Editor } from "@/pages/Editor";
 
 function getRouterBasename() {
@@ -15,6 +16,7 @@ function App() {
           <Route path="/" element={<Editor />} />
           <Route path="/edit" element={<Navigate to="/" replace />} />
           <Route path="/edit/:deckId" element={<Editor />} />
+          <Route path="/admin/exports" element={<AdminExports />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

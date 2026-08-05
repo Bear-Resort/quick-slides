@@ -8,7 +8,10 @@
  * @module
  */
 
+import type * as exportAccess from "../exportAccess.js";
 import type * as http from "../http.js";
+import type * as lib_exportQuota from "../lib/exportQuota.js";
+import type * as lib_githubAuth from "../lib/githubAuth.js";
 
 import type {
   ApiFromModules,
@@ -17,7 +20,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  exportAccess: typeof exportAccess;
   http: typeof http;
+  "lib/exportQuota": typeof lib_exportQuota;
+  "lib/githubAuth": typeof lib_githubAuth;
 }>;
 
 /**

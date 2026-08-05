@@ -1,6 +1,7 @@
-import { Files, GitBranch, Github, Redo2, Undo2 } from "lucide-react";
+import { Files, GitBranch, Github, Loader2, Redo2, Save, Undo2 } from "lucide-react";
+import { EnergySaveBadge } from "@/components/EnergySaveBadge";
 import { Return } from "@/components/Return";
-import { HelpButton } from "@/components/HelpDialog";
+import { HelpButton, AiInstructionsButton } from "@/components/HelpDialog";
 import { Menu } from "@/components/Menu";
 import { useLanguage } from "@/lib/useLanguage";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,10 @@ const copy = {
     filesTitle: "Browse presentations in your library",
     gitTitle: "Push and pull this presentation",
     githubTitle: "Sign in to GitHub and link a repository",
+    quickPush: "Quick push",
+    quickPushTitle: "Quick push all changes to GitHub",
+    quickPushBusy: "Pushing…",
+    quickPushNoChanges: "No changes to push",
     undo: "Undo",
     redo: "Redo",
     modeBrowser: "localStorage",
@@ -28,6 +33,10 @@ const copy = {
     filesTitle: "浏览本地库中的演示文稿",
     gitTitle: "推送与拉取此演示文稿",
     githubTitle: "登录 GitHub 并关联仓库",
+    quickPush: "推送",
+    quickPushTitle: "一键推送全部更改到 GitHub",
+    quickPushBusy: "推送中…",
+    quickPushNoChanges: "没有可推送的更改",
     undo: "撤销",
     redo: "重做",
     modeBrowser: "本地存储",
@@ -42,22 +51,33 @@ function ToolbarAction({
   title,
   onClick,
   active,
+  disabled,
+  loading,
 }: {
   icon: typeof Files;
   label: string;
   title: string;
   onClick: () => void;
   active?: boolean;
+  disabled?: boolean;
+  loading?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={title}
+      aria-label={label}
+      aria-busy={loading || undefined}
+      disabled={disabled || loading}
       data-active={active ? "true" : undefined}
       className="glass-toolbar-action inline-flex h-auto flex-col items-center gap-0.5 rounded-md px-2 py-1 text-foreground"
     >
-      <Icon className="size-4" aria-hidden />
+      {loading ? (
+        <Loader2 className="size-4 animate-spin" aria-hidden />
+      ) : (
+        <Icon className="size-4" aria-hidden />
+      )}
       <span className="text-[9px] font-medium leading-none">{label}</span>
     </button>
   );
@@ -74,6 +94,11 @@ type HeaderProps = {
     onOpenFiles: () => void;
     onOpenGit: () => void;
     onOpenGithub: () => void;
+    onQuickPush?: () => void;
+    quickPushBusy?: boolean;
+    canQuickPush?: boolean;
+    /** Linked to GitHub but working tree is clean. */
+    quickPushClean?: boolean;
     onUndo?: () => void;
     onRedo?: () => void;
     canUndo?: boolean;
@@ -167,6 +192,26 @@ export function Header({
                 active={workspace.openPanel === "vcs"}
                 onClick={workspace.onOpenGit}
               />
+              {workspace.mode === "git" ? (
+                <ToolbarAction
+                  icon={Save}
+                  label={
+                    workspace.quickPushBusy ? t.quickPushBusy : t.quickPush
+                  }
+                  title={
+                    workspace.quickPushClean
+                      ? t.quickPushNoChanges
+                      : t.quickPushTitle
+                  }
+                  loading={workspace.quickPushBusy}
+                  disabled={
+                    workspace.quickPushBusy ||
+                    workspace.canQuickPush === false ||
+                    !workspace.onQuickPush
+                  }
+                  onClick={() => workspace.onQuickPush?.()}
+                />
+              ) : null}
               <ToolbarAction
                 icon={Github}
                 label={t.github}
@@ -184,6 +229,7 @@ export function Header({
         </div>
 
         <div className="relative z-[1] flex shrink-0 items-center gap-1">
+          <EnergySaveBadge />
           {onLoadSample ? (
             <>
               <Return iconOnly />
@@ -191,6 +237,7 @@ export function Header({
                 onLoadSample={onLoadSample}
                 hasEditorContent={hasEditorContent}
               />
+              <AiInstructionsButton />
             </>
           ) : null}
           <Menu
