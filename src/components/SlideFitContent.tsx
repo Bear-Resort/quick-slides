@@ -142,8 +142,8 @@ export function SlideFitContent({
     width: "auto",
     maxWidth: "100%",
     boxSizing: "border-box",
-    overflowWrap: "anywhere",
-    wordBreak: "break-word",
+    overflowWrap: "break-word",
+    wordBreak: "normal",
   };
 
   return (

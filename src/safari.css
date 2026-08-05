@@ -174,4 +174,103 @@
     --scrollbar-thumb: rgba(161, 161, 170, 0.5);
     --scrollbar-thumb-hover: rgba(161, 161, 170, 0.66);
   }
+
+  /*
+   * KaTeX on Safari / WebKit
+   * Inline math: keep display:inline so baselines match body text.
+   * Display math: max-content box (avoid full-width stretch).
+   */
+  .markdown-preview .katex {
+    display: inline !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    vertical-align: baseline !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+    -webkit-text-size-adjust: none !important;
+    text-size-adjust: none !important;
+  }
+
+  .markdown-preview .katex .katex-html {
+    display: inline !important;
+    width: auto !important;
+    max-width: none !important;
+    vertical-align: baseline !important;
+  }
+
+  .markdown-preview .katex .base {
+    width: -webkit-min-content !important;
+    width: min-content !important;
+    max-width: none !important;
+    min-width: min-content !important;
+  }
+
+  .markdown-preview .katex-display {
+    display: block !important;
+    width: auto !important;
+    max-width: none !important;
+    text-align: center;
+  }
+
+  .markdown-preview .katex-display > .katex {
+    display: inline-block !important;
+    width: max-content !important;
+    max-width: none !important;
+    min-width: max-content !important;
+    vertical-align: baseline !important;
+  }
+
+  .slide-body-text,
+  .slide-content-body,
+  .slide-text-content :is(p, li, ul, ol, blockquote) {
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  /* Rem sizes so WebKit zoom doesn’t compound em-based KaTeX font-size oddly */
+  .slide-text-title .katex {
+    font-size: 2.15rem !important;
+  }
+
+  .slide-text-title .katex-display > .katex {
+    font-size: 2.3rem !important;
+  }
+
+  .slide-text-subtitle .katex {
+    font-size: 2rem !important;
+  }
+
+  .slide-text-subtitle .katex-display > .katex {
+    font-size: 2.15rem !important;
+  }
+
+  .slide-text-content .katex {
+    font-size: 1.9rem !important;
+  }
+
+  .slide-text-content .katex-display > .katex {
+    font-size: 2.05rem !important;
+  }
+
+  .slide-content-heading .katex,
+  .slide-primary-heading .katex {
+    font-size: 1.35rem !important;
+  }
+
+  .markdown-preview .katex .katex-mathml,
+  .markdown-preview .katex math {
+    display: none !important;
+  }
+
+  .markdown-preview .katex svg {
+    max-width: none !important;
+  }
+
+  /* MathJax SVG images used as Safari paint fallback */
+  .markdown-preview img[data-katex-raster="true"] {
+    vertical-align: baseline !important;
+  }
 }

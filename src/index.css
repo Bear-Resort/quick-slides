@@ -1003,18 +1003,80 @@ html.energy-save .energy-save-badge {
   color: hsl(var(--foreground));
 }
 
-/* KaTeX expects line-height 1.2; slide body line-height breaks glyph placement in html2canvas. */
-.markdown-preview .katex,
-.markdown-preview .katex * {
+/*
+ * KaTeX sizing — keep KaTeX’s own min-content layout.
+ * Never max-width:100% on .katex (Safari collapses used width → short=huge, long=tiny).
+ * Display math must be max-content, not block-full-width (Safari stretch-to-slot).
+ * Inline .katex must stay `inline` (not inline-block) so KaTeX struts keep baseline
+ * with surrounding text — inline-block drops math below the line in WebKit.
+ */
+.markdown-preview .katex {
+  position: relative;
+  display: inline;
+  font-size: 1.1em;
+  font-family: KaTeX_Main, "Times New Roman", Times, serif;
   line-height: 1.2;
+  text-indent: 0;
+  text-rendering: auto;
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+  vertical-align: baseline;
+  max-width: none;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+}
+
+.markdown-preview .katex .katex-html {
+  display: inline;
+  vertical-align: baseline;
+  max-width: none;
+}
+
+/* Keep KaTeX default min-content — do not force width:auto (Safari fixed-slot bug). */
+.markdown-preview .katex .base {
+  width: -webkit-min-content;
+  width: min-content;
+  max-width: none;
 }
 
 .markdown-preview .katex-display {
   display: block;
-  width: 100%;
+  width: auto;
+  max-width: none;
   margin: 0.75rem 0;
   text-align: center;
-  overflow-x: auto;
+  overflow-x: visible;
+  overflow-y: visible;
+  white-space: normal;
+}
+
+.markdown-preview .katex-display > .katex {
+  /* KaTeX default is display:block (full parent width) — that triggers Safari stretch. */
+  display: inline-block;
+  width: max-content;
+  max-width: none;
+  text-align: left;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+.markdown-preview .katex .katex-mathml,
+.markdown-preview .katex .katex-mathml math {
+  display: none !important;
+}
+
+.markdown-preview .katex svg {
+  max-width: none !important;
+  max-height: none !important;
+}
+
+
+/* Don't let slide wrap settings leak into math min-content sizing. */
+.slide-body-text:has(.katex),
+.slide-body-text:has(.katex-display) {
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .markdown-preview p:has(> .katex-display) {
@@ -1064,36 +1126,40 @@ html.energy-save .energy-save-badge {
   line-height: inherit;
 }
 
+/*
+ * Slide math: slight bump so KaTeX matches Noto Serif SC optically.
+ * Only set font-size on `.katex` — never on `.katex-display` (avoids em compounding).
+ */
 .slide-text-title .katex {
-  font-size: 1.08em;
+  font-size: 1.15em;
 }
 
-.slide-text-title .katex-display {
-  font-size: 1.22em;
+.slide-text-title .katex-display > .katex {
+  font-size: 1.25em;
 }
 
 .slide-text-subtitle .katex {
-  font-size: 1.04em;
+  font-size: 1.12em;
 }
 
-.slide-text-subtitle .katex-display {
-  font-size: 1.14em;
+.slide-text-subtitle .katex-display > .katex {
+  font-size: 1.2em;
 }
 
 .slide-text-content .katex {
-  font-size: 1em;
+  font-size: 1.12em;
 }
 
-.slide-text-content .katex-display {
-  font-size: 1.08em;
+.slide-text-content .katex-display > .katex {
+  font-size: 1.2em;
 }
 
 .slide-content-heading .katex {
-  font-size: 0.72em;
+  font-size: 0.85em;
 }
 
-.slide-content-heading .katex-display {
-  font-size: 0.78em;
+.slide-content-heading .katex-display > .katex {
+  font-size: 0.95em;
 }
 
 .slide-inline-code {
@@ -1106,11 +1172,11 @@ html.energy-save .energy-save-badge {
 }
 
 .slide-primary-heading .katex {
-  font-size: 0.55em;
+  font-size: 0.7em;
 }
 
-.slide-primary-heading .katex-display {
-  font-size: 0.62em;
+.slide-primary-heading .katex-display > .katex {
+  font-size: 0.8em;
 }
 
 .slide-title-body > :first-child {
@@ -1129,8 +1195,9 @@ html.energy-save .energy-save-badge {
 .slide-content-body {
   width: 100%;
   max-width: 100%;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  /* Softer than overflow-wrap:anywhere — that collapses KaTeX min-content in Safari. */
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .slide-list-ordered,
@@ -1305,9 +1372,16 @@ html.energy-save .energy-save-badge {
 
 .slide-content-overflow .katex-display {
   display: block;
-  width: 100%;
+  width: auto;
+  max-width: none;
   text-align: center;
   margin-bottom: 0.75rem;
+}
+
+.slide-content-overflow .katex-display > .katex {
+  display: inline-block;
+  width: auto;
+  max-width: none;
 }
 
 .slide-content-overflow .slide-content {

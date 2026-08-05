@@ -48,6 +48,10 @@ function shouldInlineVisualStyles(element: HTMLElement): boolean {
   if (element.closest(".katex-mathml")) return false;
   if (element.dataset.katexRaster === "true") return false;
   if (element.closest("[data-katex-raster='true']")) return false;
+  // Never touch KaTeX internals — em-based sizing / 1px vlist-s break if inlined.
+  if (element.closest(".katex") && !element.classList.contains("katex")) {
+    return false;
+  }
   return true;
 }
 
@@ -56,7 +60,7 @@ function inlineVisualStyles(element: HTMLElement): void {
   if (!shouldInlineVisualStyles(element)) return;
 
   const computed = getComputedStyle(element);
-  const isKatexNode = element.classList.contains("katex") || Boolean(element.closest(".katex"));
+  const isKatexRoot = element.classList.contains("katex");
 
   element.style.color = computed.color;
 
@@ -82,7 +86,15 @@ function inlineVisualStyles(element: HTMLElement): void {
     element.style.boxShadow = computed.boxShadow;
   }
 
-  if (isKatexNode || TEXTUAL_TAGS.has(element.tagName)) {
+  // Root .katex only — never descendants.
+  if (isKatexRoot) {
+    element.style.fontSize = computed.fontSize;
+    element.style.color = computed.color;
+    element.style.lineHeight = "1.2";
+    return;
+  }
+
+  if (TEXTUAL_TAGS.has(element.tagName)) {
     element.style.fontSize = computed.fontSize;
     element.style.fontWeight = computed.fontWeight;
     element.style.fontStyle = computed.fontStyle;
@@ -112,6 +124,17 @@ export function isKatexDisplay(mathEl: HTMLElement): boolean {
 export function getKatexSource(
   mathEl: HTMLElement,
 ): { tex: string; displayMode: boolean } | null {
+  const dataTex =
+    mathEl.getAttribute("data-tex")?.trim() ||
+    mathEl.dataset.tex?.trim() ||
+    null;
+  if (dataTex) {
+    return {
+      tex: dataTex,
+      displayMode: isKatexDisplay(mathEl),
+    };
+  }
+
   const mathml = mathEl.querySelector(".katex-mathml");
   if (!mathml) return null;
 
@@ -133,18 +156,40 @@ export function getKatexSource(
 /** Reset inherited slide typography so export layout matches KaTeX expectations. */
 export function prepareKatexForCapture(root: ParentNode): void {
   root.querySelectorAll<HTMLElement>(".katex").forEach((katexEl) => {
-    const isDisplay = katexEl.classList.contains("katex-display");
+    const isDisplay =
+      katexEl.classList.contains("katex-display") ||
+      Boolean(katexEl.closest(".katex-display"));
+    // Content-sized box — never stretch to the full slide width (Safari especially).
     katexEl.style.lineHeight = KATEX_LINE_HEIGHT;
-    katexEl.style.display = isDisplay ? "block" : "inline-block";
+    katexEl.style.display = "inline-block";
+    katexEl.style.width = "auto";
+    katexEl.style.maxWidth = "none";
+    katexEl.style.whiteSpace = "nowrap";
+    katexEl.style.wordBreak = "normal";
+    katexEl.style.overflowWrap = "normal";
+    katexEl.style.verticalAlign = isDisplay ? "middle" : "baseline";
+    katexEl.style.textIndent = "0";
+    katexEl.style.position = "relative";
 
     const computed = getComputedStyle(katexEl);
+    const parent = katexEl.parentElement;
+    const parentFont =
+      parent instanceof HTMLElement
+        ? Number.parseFloat(getComputedStyle(parent).fontSize)
+        : Number.NaN;
+    const selfFont = Number.parseFloat(computed.fontSize);
+    if (!Number.isFinite(selfFont) || selfFont < 10) {
+      const fallback =
+        Number.isFinite(parentFont) && parentFont > 0
+          ? parentFont * 1.12
+          : 27;
+      katexEl.style.fontSize = `${fallback}px`;
+    } else {
+      katexEl.style.fontSize = computed.fontSize;
+    }
     katexEl.style.color = computed.color;
-    katexEl.style.fontSize = computed.fontSize;
 
-    katexEl.querySelectorAll<HTMLElement>("*").forEach((node) => {
-      node.style.lineHeight = KATEX_LINE_HEIGHT;
-    });
-
+    // Never set font-size on descendants — KaTeX relies on em nesting / 1px vlist-s.
     katexEl.querySelectorAll<HTMLElement>(".katex-mathml").forEach((mathml) => {
       mathml.style.display = "none";
     });
@@ -240,13 +285,20 @@ export async function waitForCaptureImages(root: ParentNode): Promise<void> {
     if (img.complete && img.naturalWidth > 0) continue;
     tasks.push(
       new Promise((resolve) => {
-        img.addEventListener("load", () => resolve(), { once: true });
-        img.addEventListener("error", () => resolve(), { once: true });
+        const done = () => resolve();
+        img.addEventListener("load", done, { once: true });
+        img.addEventListener("error", done, { once: true });
+        // Already-broken or cached-empty images shouldn't block forever.
+        window.setTimeout(done, 4_000);
       }),
     );
   }
 
-  for (const element of root.querySelectorAll<HTMLElement>("*")) {
+  // Only check nodes that commonly carry theme/sticker backgrounds — not every span.
+  const bgCandidates = root.querySelectorAll<HTMLElement>(
+    ".slide-canvas, .slide-sticker, [class*='slide-theme'], [style*='background']",
+  );
+  for (const element of bgCandidates) {
     const url = extractBackgroundImageUrl(getComputedStyle(element).backgroundImage);
     if (url) backgroundUrls.add(url);
   }
@@ -255,26 +307,43 @@ export async function waitForCaptureImages(root: ParentNode): Promise<void> {
     tasks.push(preloadImage(url));
   }
 
-  await Promise.all(tasks);
+  if (tasks.length === 0) return;
+  await Promise.race([
+    Promise.all(tasks),
+    new Promise<void>((resolve) => window.setTimeout(resolve, 6_000)),
+  ]);
 }
 
 /** Wait for fonts and KaTeX layout before export. */
-export async function waitForExportReady(root?: ParentNode): Promise<void> {
-  await document.fonts.ready;
-  await Promise.all(
-    KATEX_FONT_FAMILIES.flatMap((family) => [
-      document.fonts.load(`400 16px "${family}"`).catch(() => undefined),
-      document.fonts.load(`700 16px "${family}"`).catch(() => undefined),
-    ]),
-  );
+export async function waitForExportReady(
+  root?: ParentNode,
+  options?: { quick?: boolean },
+): Promise<void> {
+  const quick = options?.quick ?? false;
+
+  await Promise.race([
+    document.fonts.ready,
+    new Promise<void>((resolve) => window.setTimeout(resolve, quick ? 1_500 : 4_000)),
+  ]);
+
+  if (!quick) {
+    await Promise.all(
+      KATEX_FONT_FAMILIES.flatMap((family) => [
+        document.fonts.load(`400 16px "${family}"`).catch(() => undefined),
+        document.fonts.load(`700 16px "${family}"`).catch(() => undefined),
+      ]),
+    );
+  }
 
   await new Promise<void>((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   });
-  await new Promise<void>((resolve) => setTimeout(resolve, 200));
+  await new Promise<void>((resolve) =>
+    setTimeout(resolve, quick ? 50 : 120),
+  );
 
-  if (root?.querySelector(".katex, [data-katex-raster='true']")) {
-    await new Promise<void>((resolve) => setTimeout(resolve, 150));
+  if (!quick && root?.querySelector(".katex, [data-katex-raster='true']")) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 80));
   }
 }
 

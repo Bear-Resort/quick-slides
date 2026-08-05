@@ -19,8 +19,8 @@ import {
   revealLoadedImagesForCapture,
   type ExportImageOptions,
 } from "@/lib/exportImages";
-import { resolveDeckImageSrc } from "@/lib/library/deckImages";
 import { replaceMathEquationsForCapture } from "@/lib/exportMathJax";
+import { resolveDeckImageSrc } from "@/lib/library/deckImages";
 import { getLanguage, type Language } from "@/lib/language";
 import { getExportBasename } from "@/lib/presentationFilename";
 import { splitSlides } from "@/lib/slides";
@@ -36,7 +36,7 @@ const PDF_CAPTURE_SCALE = 1.5;
 const PDF_JPEG_QUALITY = 0.92;
 
 async function waitForRender(root?: ParentNode): Promise<void> {
-  await waitForExportReady(root);
+  await waitForExportReady(root, { quick: true });
 }
 
 function collectEmbeddedStyles(): string {
@@ -333,16 +333,15 @@ async function prepareSlideElementForExport(
   const captureScope = pageRoot;
 
   await waitForSlideFitContent(captureScope);
-  prepareSlideForCapture(slideEl);
+  // Size KaTeX, then rasterize to MathJax SVG <img> before style inlining —
+  // html2canvas scrambles KaTeX HTML baselines (operators as superscripts, etc.).
   prepareKatexForCapture(captureScope);
   await replaceMathEquationsForCapture(captureScope);
-  prepareKatexForCapture(captureScope);
-  await waitForExportReady(captureScope);
+  prepareSlideForCapture(slideEl);
+  await waitForExportReady(captureScope, { quick: true });
   await waitForCaptureImages(captureScope);
-  await waitForExportReady(captureScope);
   revealLoadedImagesForCapture(captureScope);
   await embedImagesForExport(captureScope, exportImages);
-  // Remeasure after fonts/images so columns match the live preview (prefer 2+scale).
   await remeasureSlideFitContent(captureScope);
   inlineColumnStylesForCapture(captureScope);
 
@@ -515,6 +514,25 @@ html, body {
   text-align: center;
   break-inside: avoid;
   -webkit-column-break-inside: avoid;
+}
+.slide-content-overflow .katex-display > .katex,
+.katex-display > .katex {
+  display: inline-block;
+  width: auto;
+  max-width: none;
+}
+.katex-display {
+  width: auto;
+  max-width: none;
+}
+.katex,
+.katex .katex-html,
+.katex .base {
+  max-width: none !important;
+}
+.katex .katex-mathml,
+.katex .katex-mathml math {
+  display: none !important;
 }
 .slide-image-caption {
   display: block;

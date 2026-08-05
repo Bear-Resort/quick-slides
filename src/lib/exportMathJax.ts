@@ -3,10 +3,9 @@ import { getKatexSource, isKatexDisplay } from "@/lib/exportCapture";
 const MATHJAX_SCRIPT = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js";
 const EXPORT_MATH_ATTR = "data-katex-raster";
 /** Bump when MathJax init options change so cached instances are discarded. */
-const MATHJAX_EXPORT_CONFIG = "local-font-v1";
-const RASTER_SCALE = 3;
-const MATHJAX_LOAD_TIMEOUT_MS = 20_000;
-const SVG_IMAGE_TIMEOUT_MS = 8_000;
+const MATHJAX_EXPORT_CONFIG = "svg-dataurl-v2";
+const MATHJAX_LOAD_TIMEOUT_MS = 8_000;
+const EQUATION_TIMEOUT_MS = 4_000;
 
 type MathJaxGlobal = {
   startup: {
@@ -51,8 +50,13 @@ function getMathReplacementTarget(mathEl: HTMLElement): HTMLElement {
 }
 
 function loadScript(src: string, datasetKey: string): Promise<void> {
+  // dataset.mathjaxExport → attribute data-mathjax-export
+  const dataAttr = datasetKey.replace(
+    /[A-Z]/g,
+    (letter) => `-${letter.toLowerCase()}`,
+  );
   const existing = document.querySelector<HTMLScriptElement>(
-    `script[data-${datasetKey}="true"]`,
+    `script[data-${dataAttr}="true"]`,
   );
 
   if (existing) {
@@ -100,11 +104,8 @@ function configureMathJax(): void {
         },
       },
     },
-    tex: {
-      packages: { "[+]": ["ams", "noerrors", "noundefined"] },
-    },
     svg: {
-      fontCache: "local",
+      fontCache: "none",
     },
   } as unknown as MathJaxGlobal;
 }
@@ -116,7 +117,7 @@ async function waitForTex2Svg(): Promise<MathJaxGlobal> {
     if (typeof mathJax?.tex2svg === "function") {
       return mathJax;
     }
-    await sleep(50);
+    await sleep(40);
   }
   throw new Error("MathJax tex2svg not available after load");
 }
@@ -128,16 +129,12 @@ async function loadMathJax(): Promise<MathJaxGlobal | null> {
   const configMatches =
     existingScript?.dataset.mathjaxConfig === MATHJAX_EXPORT_CONFIG;
 
-  if (
-    configMatches &&
-    typeof window.MathJax?.tex2svg === "function"
-  ) {
+  if (configMatches && typeof window.MathJax?.tex2svg === "function") {
     return window.MathJax;
   }
 
   existingScript?.remove();
   delete window.MathJax;
-  mathJaxReady = null;
 
   try {
     configureMathJax();
@@ -178,11 +175,12 @@ async function ensureMathJaxReady(): Promise<MathJaxGlobal | null> {
   return mathJaxReady;
 }
 
-/** Remove hidden accessibility markup that html2canvas may still paint. */
 function stripAssistiveMathml(node: ParentNode): void {
-  node.querySelectorAll<HTMLElement>("mjx-assistive-mml, .mjx-assistive-mml").forEach((el) => {
-    el.remove();
-  });
+  node
+    .querySelectorAll<HTMLElement>("mjx-assistive-mml, .mjx-assistive-mml")
+    .forEach((el) => {
+      el.remove();
+    });
 }
 
 function applySvgColor(svg: SVGElement, color: string): void {
@@ -199,65 +197,109 @@ function applySvgColor(svg: SVGElement, color: string): void {
   }
 }
 
-async function svgElementToPngImage(
+/** Prefer SVG data-URL images — much faster than canvas PNG, and html2canvas draws them cleanly. */
+function svgElementToImage(
   svg: SVGElement,
   width: number,
   height: number,
   isDisplay: boolean,
-): Promise<HTMLImageElement> {
+  verticalAlign?: string,
+): HTMLImageElement {
   const clone = svg.cloneNode(true) as SVGElement;
   clone.setAttribute("width", String(width));
   clone.setAttribute("height", String(height));
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
 
   const svgString = new XMLSerializer().serializeToString(clone);
   const dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`;
 
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.ceil(width * RASTER_SCALE));
-  canvas.height = Math.max(1, Math.ceil(height * RASTER_SCALE));
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    throw new Error("Canvas 2D context unavailable");
-  }
-
-  const svgImage = new Image();
-  svgImage.decoding = "async";
-  await withTimeout(
-    new Promise<void>((resolve, reject) => {
-      svgImage.onload = () => resolve();
-      svgImage.onerror = () => reject(new Error("Failed to decode MathJax SVG"));
-      svgImage.src = dataUrl;
-    }),
-    SVG_IMAGE_TIMEOUT_MS,
-    "MathJax SVG decode",
-  );
-
-  ctx.drawImage(svgImage, 0, 0, canvas.width, canvas.height);
-
   const img = document.createElement("img");
-  img.src = canvas.toDataURL("image/png");
+  img.src = dataUrl;
   img.alt = "";
   img.setAttribute(EXPORT_MATH_ATTR, "true");
+  img.width = Math.max(1, Math.round(width));
+  img.height = Math.max(1, Math.round(height));
   img.style.width = `${width}px`;
   img.style.height = `${height}px`;
 
   if (isDisplay) {
     img.style.display = "block";
-    img.style.margin = "0 auto";
+    img.style.margin = "0.35em auto";
+    img.style.verticalAlign = "baseline";
   } else {
-    img.style.display = "inline-block";
-    img.style.verticalAlign = "middle";
-  }
-
-  if (img.decode) {
-    await withTimeout(
-      img.decode().catch(() => undefined),
-      SVG_IMAGE_TIMEOUT_MS,
-      "PNG decode",
-    );
+    img.style.display = "inline";
+    img.style.verticalAlign =
+      verticalAlign && verticalAlign !== "auto" ? verticalAlign : "baseline";
   }
 
   return img;
+}
+
+function resolveExportFontPx(mathEl: HTMLElement, computed: CSSStyleDeclaration): number {
+  const parent = mathEl.parentElement;
+  const parentFont =
+    parent instanceof HTMLElement
+      ? Number.parseFloat(getComputedStyle(parent).fontSize)
+      : Number.NaN;
+  const selfFont = Number.parseFloat(computed.fontSize);
+  if (Number.isFinite(selfFont) && selfFont >= 10) return selfFont;
+  if (Number.isFinite(parentFont) && parentFont > 0) return parentFont * 1.12;
+  return 27;
+}
+
+/** Parse MathJax SVG width/height attrs (`2.5ex`, `12px`, bare numbers). */
+function parseSvgLength(value: string | null, fontPx: number): number {
+  if (!value) return 0;
+  const trimmed = value.trim();
+  const ex = /^([\d.]+)\s*ex$/i.exec(trimmed);
+  if (ex) {
+    // CSS 1ex ≈ x-height; MathJax sizes track the math font (~0.43–0.5em).
+    return Number(ex[1]) * fontPx * 0.45;
+  }
+  const em = /^([\d.]+)\s*em$/i.exec(trimmed);
+  if (em) return Number(em[1]) * fontPx;
+  const px = /^([\d.]+)\s*px$/i.exec(trimmed);
+  if (px) return Number(px[1]);
+  const bare = Number.parseFloat(trimmed);
+  return Number.isFinite(bare) ? bare : 0;
+}
+
+function measureMathJaxSvg(
+  svg: SVGElement,
+  mjNode: HTMLElement,
+  fontPx: number,
+): { width: number; height: number } {
+  const rect = svg.getBoundingClientRect();
+  let width = Math.max(rect.width, svg.clientWidth, 0);
+  let height = Math.max(rect.height, svg.clientHeight, 0);
+
+  if (width < 2 || height < 2) {
+    width = Math.max(
+      width,
+      parseSvgLength(svg.getAttribute("width"), fontPx),
+      mjNode.offsetWidth,
+      mjNode.scrollWidth,
+    );
+    height = Math.max(
+      height,
+      parseSvgLength(svg.getAttribute("height"), fontPx),
+      mjNode.offsetHeight,
+      mjNode.scrollHeight,
+    );
+  }
+
+  if ((width < 2 || height < 2) && svg.viewBox.baseVal.width > 0) {
+    // MathJax viewBox units: 1000 ≈ 1em of the math font.
+    const vb = svg.viewBox.baseVal;
+    width = Math.max(width, (vb.width / 1000) * fontPx);
+    height = Math.max(height, (vb.height / 1000) * fontPx);
+  }
+
+  return {
+    // Never fall back to fontPx for width — that forced every equation into one slot.
+    width: Math.max(width, 1),
+    height: Math.max(height, fontPx * 0.5, 1),
+  };
 }
 
 async function renderMathToImage(
@@ -271,56 +313,56 @@ async function renderMathToImage(
 
   const computed = getComputedStyle(mathEl);
   const isDisplay = isKatexDisplay(mathEl);
-  // Match the on-screen KaTeX box so rasterized equations keep the correct ratio.
-  const katexBox = mathEl.getBoundingClientRect();
-  const targetWidth = Math.max(katexBox.width, mathEl.offsetWidth, 1);
-  const targetHeight = Math.max(katexBox.height, mathEl.offsetHeight, 1);
+  const fontPx = resolveExportFontPx(mathEl, computed);
+  const fontSize = `${fontPx}px`;
 
   const mjNode = mathJax.tex2svg(source.tex, { display: source.displayMode });
   stripAssistiveMathml(mjNode);
   mjNode.style.color = computed.color;
-  mjNode.style.fontSize = computed.fontSize;
+  mjNode.style.fontSize = fontSize;
+  mjNode.style.display = isDisplay ? "block" : "inline-block";
+  mjNode.style.lineHeight = "1.2";
 
   const measureHost = document.createElement("div");
   measureHost.style.cssText =
-    "position:fixed;left:0;top:0;z-index:-1;opacity:0;pointer-events:none;line-height:1.2;";
+    "position:fixed;left:-10000px;top:0;opacity:0;pointer-events:none;line-height:1.2;white-space:nowrap;";
   measureHost.style.color = computed.color;
-  measureHost.style.fontSize = computed.fontSize;
+  measureHost.style.fontSize = fontSize;
   if (isDisplay) {
     measureHost.style.display = "block";
     measureHost.style.textAlign = "center";
-    measureHost.style.width = `${targetWidth}px`;
+    measureHost.style.whiteSpace = "normal";
   }
   measureHost.appendChild(mjNode);
   document.body.appendChild(measureHost);
 
   await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    requestAnimationFrame(() => resolve());
   });
-
-  const mjWidth = Math.max(mjNode.offsetWidth, mjNode.scrollWidth, 1);
-  const mjHeight = Math.max(mjNode.offsetHeight, mjNode.scrollHeight, 1);
-  measureHost.remove();
 
   const svg = mjNode.querySelector("svg");
   if (!(svg instanceof SVGElement)) {
+    measureHost.remove();
     throw new Error("MathJax did not produce SVG output");
   }
 
-  // Uniformly scale MathJax output to the on-screen KaTeX box (preserve aspect ratio).
-  let width = mjWidth;
-  let height = mjHeight;
-  if (targetWidth > 2 && targetHeight > 2) {
-    const scale = Math.min(targetWidth / mjWidth, targetHeight / mjHeight);
-    width = Math.max(1, mjWidth * scale);
-    height = Math.max(1, mjHeight * scale);
-  }
+  const { width: mjWidth, height: mjHeight } = measureMathJaxSvg(
+    svg,
+    mjNode,
+    fontPx,
+  );
+  const verticalAlign =
+    svg.style.verticalAlign ||
+    getComputedStyle(svg).verticalAlign ||
+    mjNode.style.verticalAlign ||
+    undefined;
+  measureHost.remove();
 
   applySvgColor(svg, computed.color);
-  return svgElementToPngImage(svg, width, height, isDisplay);
+  return svgElementToImage(svg, mjWidth, mjHeight, isDisplay, verticalAlign);
 }
 
-/** Replace KaTeX HTML with MathJax SVG rasterized to PNG for PDF capture. */
+/** Replace KaTeX HTML with MathJax SVG images so html2canvas keeps baselines intact. */
 export async function replaceMathEquationsForCapture(root: ParentNode): Promise<void> {
   const mathNodes = Array.from(root.querySelectorAll<HTMLElement>(".katex"));
   if (mathNodes.length === 0) return;
@@ -331,14 +373,28 @@ export async function replaceMathEquationsForCapture(root: ParentNode): Promise<
     return;
   }
 
-  for (const mathEl of mathNodes) {
-    if (!mathEl.isConnected) continue;
+  // One replacement per equation (display wrappers share a single .katex child).
+  const seenTargets = new Set<HTMLElement>();
 
-    try {
-      const img = await renderMathToImage(mathEl, mathJax);
-      getMathReplacementTarget(mathEl).replaceWith(img);
-    } catch (error) {
-      console.warn("MathJax export rendering failed; keeping KaTeX HTML fallback:", error);
-    }
-  }
+  await Promise.all(
+    mathNodes.map(async (mathEl) => {
+      if (!mathEl.isConnected) return;
+      const target = getMathReplacementTarget(mathEl);
+      if (seenTargets.has(target)) return;
+      seenTargets.add(target);
+
+      try {
+        const img = await withTimeout(
+          renderMathToImage(mathEl, mathJax),
+          EQUATION_TIMEOUT_MS,
+          "Equation render",
+        );
+        if (target.isConnected) {
+          target.replaceWith(img);
+        }
+      } catch (error) {
+        console.warn("MathJax export rendering failed; keeping KaTeX HTML:", error);
+      }
+    }),
+  );
 }

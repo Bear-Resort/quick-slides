@@ -2,9 +2,9 @@ import type { ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
 import { SlideFitContent } from "@/components/SlideFitContent";
 import { SlideImagePanel } from "@/components/SlideImage";
+import { markdownRehypePlugins } from "@/lib/markdownRehype";
 import { normalizeDisplayMath, prepareSlideMarkdown } from "@/lib/markdown";
 import { resolvePlaceholdersForSlide } from "@/lib/editorPlaceholders";
 import {
@@ -31,8 +31,8 @@ const SLIDE_BODY_SCALE: Record<SlideLayoutType, string> = {
 /** Typography is fixed to the 1280×720 canvas; preview scales the whole canvas. */
 function createSlideComponents(layout: SlideLayoutType) {
   const isVerticallyCentered = isVerticallyCenteredLayout(layout);
-  const bodyText =
-    "slide-body-text text-left break-words [overflow-wrap:anywhere]";
+  const bodyText = "slide-body-text text-left";
+
 
   return {
     h1: ({ children }: { children?: ReactNode }) => (
@@ -164,7 +164,7 @@ function SlideMarkdownBody({
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[...markdownRehypePlugins]}
         components={createSlideComponents(layout)}
       >
         {normalized}

@@ -17,7 +17,7 @@ export const TWO_COL_GRID_STYLE =
   "display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:2.5rem;row-gap:0;align-items:start;width:100%;max-width:100%;min-width:0;box-sizing:border-box;";
 
 export const TWO_COL_PANE_STYLE =
-  "min-width:0;width:auto;max-width:100%;box-sizing:border-box;overflow-wrap:anywhere;word-break:break-word;";
+  "min-width:0;width:auto;max-width:100%;box-sizing:border-box;overflow-wrap:break-word;word-break:normal;";
 
 type Piece = {
   html: string;
