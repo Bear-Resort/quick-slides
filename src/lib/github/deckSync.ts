@@ -1,17 +1,12 @@
 import {
-  DECK_IMAGES_DIR,
+  createDeckMetadata,
   DECK_MARKDOWN_FILE,
   DECK_META_FILE,
   parseDeckMetadata,
   serializeDeckMetadata,
   type DeckMetadata,
 } from "@/lib/library/deckFormat";
-import {
-  ensureSubdirectory,
-  writeBinaryFile,
-  writeJsonFile,
-  writeTextFile,
-} from "@/lib/library/fsAccess";
+import { readTextFile, writeJsonFile } from "@/lib/library/fsAccess";
 import {
   decodeBase64ToBytes,
   decodeBase64ToText,
@@ -20,7 +15,6 @@ import {
   encodeTextAsBase64,
   getFileContent,
   getRepo,
-  listDirectory,
   putFile,
   SHARED_LIBRARY_REPO_NAME,
   type GithubRepo,
@@ -118,21 +112,6 @@ function remotePath(link: DeckGithubLink, relative: string): string {
 
 export function deckRemotePath(link: DeckGithubLink, relative: string): string {
   return remotePath(link, relative);
-}
-
-async function listLocalImageNames(
-  deckHandle: FileSystemDirectoryHandle,
-): Promise<string[]> {
-  try {
-    const images = await deckHandle.getDirectoryHandle(DECK_IMAGES_DIR);
-    const names: string[] = [];
-    for await (const [name, handle] of images.entries()) {
-      if (handle.kind === "file") names.push(name);
-    }
-    return names;
-  } catch {
-    return [];
-  }
 }
 
 /** e.g. "Content update at 080526 1305" */
@@ -364,74 +343,82 @@ export async function pullDeckFromGithub(options: {
   const link = getDeckGithubLink(options.deckId);
   if (!link) throw new Error("This presentation is not linked to a GitHub repository");
 
-  const metaFile = await getFileContent(
-    link.owner,
-    link.repo,
-    remotePath(link, DECK_META_FILE),
-    link.branch,
-  );
-  let metadata: DeckMetadata;
-  if (metaFile?.content) {
-    const parsed = parseDeckMetadata(JSON.parse(decodeBase64ToText(metaFile.content)));
-    if (!parsed) throw new Error("Remote quick-slides.json is invalid");
-    metadata = parsed;
-  } else {
-    throw new Error("Remote repository has no quick-slides.json");
+  const {
+    isTextPath,
+    listRepoFilePaths,
+    purgeCrswapFiles,
+    removeRepoPath,
+    writeRepoBinaryFile,
+    writeRepoTextFile,
+  } = await import("@/lib/github/workingTree");
+  const { listRemoteDeckFiles } = await import("@/lib/github/scmStatus");
+
+  await purgeCrswapFiles(options.deckHandle);
+
+  const remoteFiles = await listRemoteDeckFiles(link);
+  if (remoteFiles.size === 0) {
+    throw new Error("Remote repository is empty");
+  }
+
+  const written = new Set<string>();
+
+  for (const [relative, remote] of remoteFiles) {
+    if (relative.toLowerCase().endsWith(".crswap")) continue;
+    const file = await getFileContent(
+      link.owner,
+      link.repo,
+      remote.path,
+      link.branch,
+    );
+    if (!file?.content) continue;
+
+    if (isTextPath(relative)) {
+      const text = decodeBase64ToText(file.content);
+      await writeRepoTextFile(options.deckHandle, relative, text);
+    } else {
+      const bytes = decodeBase64ToBytes(file.content);
+      const buffer = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(buffer).set(bytes);
+      await writeRepoBinaryFile(options.deckHandle, relative, buffer);
+    }
+    written.add(relative);
+  }
+
+  // Drop local files that are not on the remote (full sync).
+  const localPaths = await listRepoFilePaths(options.deckHandle);
+  for (const path of localPaths) {
+    if (written.has(path)) continue;
+    if (path.toLowerCase().endsWith(".crswap")) continue;
+    try {
+      await removeRepoPath(options.deckHandle, path);
+    } catch {
+      // ignore cleanup failures
+    }
+  }
+
+  const metaRaw = await readTextFile(options.deckHandle, DECK_META_FILE);
+  let metadata: DeckMetadata | null = null;
+  if (metaRaw) {
+    try {
+      metadata = parseDeckMetadata(JSON.parse(metaRaw));
+    } catch {
+      metadata = null;
+    }
+  }
+  if (!metadata) {
+    metadata = createDeckMetadata(link.repo);
+    await writeJsonFile(
+      options.deckHandle,
+      DECK_META_FILE,
+      serializeDeckMetadata(metadata),
+    );
   }
 
   const entryFile = metadata.entryFile || DECK_MARKDOWN_FILE;
-  const mdFile = await getFileContent(
-    link.owner,
-    link.repo,
-    remotePath(link, entryFile),
-    link.branch,
-  );
-  if (!mdFile?.content) {
-    throw new Error(`Remote repository has no ${entryFile}`);
-  }
-  const markdown = decodeBase64ToText(mdFile.content);
-
-  await writeTextFile(options.deckHandle, entryFile, markdown);
-  await writeJsonFile(
-    options.deckHandle,
-    DECK_META_FILE,
-    serializeDeckMetadata(metadata),
-  );
-
-  const imagesDir = await ensureSubdirectory(options.deckHandle, DECK_IMAGES_DIR);
-  const remoteImages = await listDirectory(
-    link.owner,
-    link.repo,
-    remotePath(link, DECK_IMAGES_DIR),
-    link.branch,
-  );
-  const remoteNames = new Set<string>();
-
-  for (const file of remoteImages) {
-    if (file.type !== "file") continue;
-    remoteNames.add(file.name);
-    const remote = await getFileContent(
-      link.owner,
-      link.repo,
-      file.path,
-      link.branch,
-    );
-    if (!remote?.content) continue;
-    const bytes = decodeBase64ToBytes(remote.content);
-    const buffer = new ArrayBuffer(bytes.byteLength);
-    new Uint8Array(buffer).set(bytes);
-    await writeBinaryFile(imagesDir, file.name, buffer);
-  }
-
-  const localImages = await listLocalImageNames(options.deckHandle);
-  for (const name of localImages) {
-    if (remoteNames.has(name)) continue;
-    try {
-      await imagesDir.removeEntry(name);
-    } catch {
-      // ignore
-    }
-  }
+  const markdown =
+    (await readTextFile(options.deckHandle, entryFile)) ??
+    (await readTextFile(options.deckHandle, DECK_MARKDOWN_FILE)) ??
+    "";
 
   return { markdown, metadata };
 }

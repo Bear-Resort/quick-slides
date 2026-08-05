@@ -53,6 +53,7 @@ import {
 import {
   createDeck,
   ensureBrowserLibraryRoot,
+  loadDeck,
 } from "@/lib/library/deckStorage";
 import { getDefaultPresentationFilename } from "@/lib/presentationFilename";
 import { useLanguage } from "@/lib/useLanguage";
@@ -131,6 +132,10 @@ const copy = {
     pulling: "Pulling…",
     pushOk: "Pushed to GitHub.",
     pullOk: "Pulled from GitHub.",
+    pullSkippedKeepLocal: "Linked. Kept your local files.",
+    pullSkippedEmpty: "Linked. Remote has no files yet.",
+    keepLocalConfirm:
+      "This presentation already has local files. Keep them?\n\nOK — keep local (link only)\nCancel — replace with the repository",
     conflictHint:
       "Remote changed. Pull to take remote, or Force push to keep local.",
     noClientId:
@@ -203,6 +208,10 @@ const copy = {
     pulling: "拉取中…",
     pushOk: "已推送到 GitHub。",
     pullOk: "已从 GitHub 拉取。",
+    pullSkippedKeepLocal: "已关联。已保留本地文件。",
+    pullSkippedEmpty: "已关联。远程尚无文件。",
+    keepLocalConfirm:
+      "当前演示文稿已有本地文件。要保留吗？\n\n确定 — 保留本地（仅关联）\n取消 — 用仓库内容覆盖",
     conflictHint: "远程有变更。可拉取采用远程，或强制推送保留本地。",
     noClientId: "请在 .env.local 中设置 VITE_GITHUB_CLIENT_ID 以启用 GitHub 登录。",
     createDeckFailed: "无法为此仓库创建本地演示文稿。",
@@ -364,14 +373,73 @@ export function GitPanel({
     void refreshScm();
   }, [open, isGithub, scmEpoch, refreshScm]);
 
-  const ensureDeckForLink = async (preferredTitle?: string): Promise<string> => {
-    if (deckId) return deckId;
+  const ensureDeckForLink = async (
+    preferredTitle?: string,
+  ): Promise<{
+    id: string;
+    handle: FileSystemDirectoryHandle;
+    created: boolean;
+  }> => {
+    if (deckId && deckHandle) {
+      return { id: deckId, handle: deckHandle, created: false };
+    }
+    if (deckId) {
+      const root = await ensureBrowserLibraryRoot();
+      if (!root) throw new Error(t.createDeckFailed);
+      const deck = await loadDeck(root, deckId);
+      if (!deck) throw new Error(t.createDeckFailed);
+      return { id: deckId, handle: deck.handle, created: false };
+    }
     const root = await ensureBrowserLibraryRoot();
     if (!root) throw new Error(t.createDeckFailed);
     const title =
       preferredTitle?.trim() || getDefaultPresentationFilename(language);
     const deck = await createDeck(root, title, language);
-    return deck.folderName;
+    return { id: deck.folderName, handle: deck.handle, created: true };
+  };
+
+  /** After linking: pull remote contents unless user keeps existing local files. */
+  const finishLink = async (options: {
+    id: string;
+    handle: FileSystemDirectoryHandle;
+    next: DeckGithubLink;
+    created: boolean;
+  }) => {
+    const { id, handle, next, created } = options;
+    setDeckGithubLink(id, next);
+    setLink(next);
+
+    const { listRemoteDeckFiles } = await import("@/lib/github/scmStatus");
+    const remoteFiles = await listRemoteDeckFiles(next);
+
+    if (remoteFiles.size === 0) {
+      setInfo(`${t.linked}: ${formatDeckGithubLinkLabel(next)}. ${t.pullSkippedEmpty}`);
+      onDeckLinked?.(id);
+      return;
+    }
+
+    let shouldPull = true;
+    if (!created) {
+      // Existing local presentation — ask before overwriting.
+      shouldPull = !window.confirm(t.keepLocalConfirm);
+    }
+
+    if (!shouldPull) {
+      setInfo(
+        `${t.linked}: ${formatDeckGithubLinkLabel(next)}. ${t.pullSkippedKeepLocal}`,
+      );
+      onDeckLinked?.(id);
+      return;
+    }
+
+    setInfo(t.pulling);
+    const pulled = await pullDeckFromGithub({ deckId: id, deckHandle: handle });
+    // Refresh editor only if we're already on this deck; otherwise navigation reloads from disk.
+    if (!deckId || deckId === id) {
+      onPulled?.(pulled);
+    }
+    setInfo(`${t.linked}: ${formatDeckGithubLinkLabel(next)}. ${t.pullOk}`);
+    onDeckLinked?.(id);
   };
 
   const startDeviceFlow = async () => {
@@ -461,16 +529,13 @@ export function GitPanel({
     setBusy(true);
     setError(null);
     try {
-      const id = await ensureDeckForLink(
+      const { id, handle, created } = await ensureDeckForLink(
         isSharedLibraryRepo(repo)
           ? deckTitle || getDefaultPresentationFilename(language)
           : repo.name,
       );
       const next = linkForDeckRepo(repo, id);
-      setDeckGithubLink(id, next);
-      setLink(next);
-      setInfo(`${t.linked}: ${formatDeckGithubLinkLabel(next)}`);
-      onDeckLinked?.(id);
+      await finishLink({ id, handle, next, created });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -494,7 +559,7 @@ export function GitPanel({
           `Use “${t.createLibrary}” for the shared ${SHARED_LIBRARY_REPO_NAME} repository.`,
         );
       }
-      const id = await ensureDeckForLink(name);
+      const { id, handle, created } = await ensureDeckForLink(name);
       const repo = await createRepo({
         name,
         privateRepo: newRepoPrivate,
@@ -503,12 +568,9 @@ export function GitPanel({
           : `Quick Slides: ${name}`,
       });
       const next = linkForDeckRepo(repo, id);
-      setDeckGithubLink(id, next);
-      setLink(next);
-      setInfo(`${t.linked}: ${formatDeckGithubLinkLabel(next)}`);
+      await finishLink({ id, handle, next, created });
       setCreateRepoOpen(false);
       await loadRepos();
-      onDeckLinked?.(id);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -520,17 +582,14 @@ export function GitPanel({
     setBusy(true);
     setError(null);
     try {
-      const id = await ensureDeckForLink(
+      const { id, handle, created } = await ensureDeckForLink(
         deckTitle || getDefaultPresentationFilename(language),
       );
       const repo = await getOrCreateSharedLibraryRepo();
       const next = linkForDeckRepo(repo, id);
-      setDeckGithubLink(id, next);
-      setLink(next);
-      setInfo(`${t.linked}: ${formatDeckGithubLinkLabel(next)}`);
+      await finishLink({ id, handle, next, created });
       setCreateRepoOpen(false);
       await loadRepos();
-      onDeckLinked?.(id);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
