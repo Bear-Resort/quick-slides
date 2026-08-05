@@ -1,47 +1,71 @@
-import type { Element, ElementContent, Root, Text } from "hast";
+/** Minimal hast shapes — avoids a direct `hast` / `@types/hast` dependency. */
+type HastText = {
+  type: "text";
+  value: string;
+};
 
-function classNames(node: Element): string[] {
+type HastElement = {
+  type: "element";
+  tagName: string;
+  properties?: Record<string, unknown>;
+  children: HastContent[];
+};
+
+type HastRoot = {
+  type: "root";
+  children: HastContent[];
+};
+
+type HastContent = HastElement | HastText | { type: string; children?: HastContent[] };
+
+function classNames(node: HastElement): string[] {
   const value = node.properties?.className;
   if (Array.isArray(value)) return value.map(String);
   if (typeof value === "string") return value.split(/\s+/).filter(Boolean);
   return [];
 }
 
-function walk(node: ElementContent | Root, visit: (element: Element) => void): void {
+function walk(node: HastContent | HastRoot, visit: (element: HastElement) => void): void {
   if (node.type === "element") {
-    visit(node);
-    for (const child of node.children) walk(child, visit);
+    const element = node as HastElement;
+    visit(element);
+    for (const child of element.children) walk(child, visit);
     return;
   }
   if (node.type === "root") {
-    for (const child of node.children) walk(child, visit);
+    for (const child of (node as HastRoot).children) walk(child, visit);
   }
 }
 
-function collectText(node: ElementContent | Root): string {
-  if (node.type === "text") return (node as Text).value;
+function collectText(node: HastContent | HastRoot): string {
+  if (node.type === "text") return (node as HastText).value;
   if (node.type === "element" || node.type === "root") {
-    return node.children.map((child) => collectText(child)).join("");
+    const children =
+      node.type === "element"
+        ? (node as HastElement).children
+        : (node as HastRoot).children;
+    return children.map((child) => collectText(child)).join("");
   }
   return "";
 }
 
-function findTexAnnotation(node: ElementContent): string | null {
+function findTexAnnotation(node: HastContent): string | null {
   if (node.type !== "element") return null;
+  const element = node as HastElement;
 
-  if (node.tagName === "annotation") {
-    const encoding = node.properties?.encoding;
+  if (element.tagName === "annotation") {
+    const encoding = element.properties?.encoding;
     const isTex =
       encoding === "application/x-tex" ||
       (Array.isArray(encoding) &&
         encoding.map(String).includes("application/x-tex"));
     if (isTex) {
-      const tex = collectText(node).trim();
+      const tex = collectText(element).trim();
       return tex || null;
     }
   }
 
-  for (const child of node.children) {
+  for (const child of element.children) {
     const tex = findTexAnnotation(child);
     if (tex) return tex;
   }
@@ -50,21 +74,21 @@ function findTexAnnotation(node: ElementContent): string | null {
 
 /**
  * After rehype-katex: copy TeX into `data-tex` and drop MathML from the tree.
- * Prefer configuring rehype-katex with `output: "html"` so MathML is never emitted.
+ * Safari's native MathML layout fights KaTeX HTML (tiny/huge equations).
  */
 export function rehypeKatexStripMathml() {
-  return (tree: Root) => {
+  return (tree: HastRoot) => {
     walk(tree, (node) => {
       const classes = classNames(node);
       if (!classes.includes("katex") || classes.includes("katex-mathml")) return;
 
       let tex: string | null = null;
-      const kept: ElementContent[] = [];
+      const kept: HastContent[] = [];
 
       for (const child of node.children) {
         if (
           child.type === "element" &&
-          classNames(child).includes("katex-mathml")
+          classNames(child as HastElement).includes("katex-mathml")
         ) {
           tex = findTexAnnotation(child) ?? tex;
           continue;

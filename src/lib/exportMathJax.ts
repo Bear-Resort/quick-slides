@@ -288,11 +288,13 @@ function measureMathJaxSvg(
     );
   }
 
-  if ((width < 2 || height < 2) && svg.viewBox.baseVal.width > 0) {
+  if ((width < 2 || height < 2) && svg instanceof SVGSVGElement) {
     // MathJax viewBox units: 1000 ≈ 1em of the math font.
     const vb = svg.viewBox.baseVal;
-    width = Math.max(width, (vb.width / 1000) * fontPx);
-    height = Math.max(height, (vb.height / 1000) * fontPx);
+    if (vb.width > 0) {
+      width = Math.max(width, (vb.width / 1000) * fontPx);
+      height = Math.max(height, (vb.height / 1000) * fontPx);
+    }
   }
 
   return {
