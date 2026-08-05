@@ -171,45 +171,34 @@ const copy = {
         body: "Use Download in the slides panel. There are three export formats:",
         items: [
           {
-            name: "PDF (selectable text)",
+            name: "HTML (presentation)",
             detail:
-              "Server-printed text PDF — sharp type you can select and search. Requires GitHub sign-in and uses your weekly quota.",
+              "Standalone, high resolution view on any browser.",
           },
           {
             name: "PDF (image)",
-            detail:
-              "Each slide rasterized as an image. Works offline; no selectable-text quota.",
+            detail: "PDF document with limited resolution.",
           },
           {
-            name: "HTML (presentation)",
+            name: "PDF (high-resolution)",
             detail:
-              "Standalone browser slideshow you can open locally or host anywhere.",
+              "Clean text PDF with high resolution. Requires GitHub sign-in and uses your weekly quota.",
           },
         ],
       },
       plans: {
         title: "Plans & quotas",
-        body: "Plans apply to selectable-text PDF exports (per calendar week). Image PDF and HTML stay available regardless of plan. Guests can use image PDF and HTML only.",
-        items: [
-          {
-            name: "Free",
-            detail: "3 selectable PDFs per week after GitHub sign-in.",
-          },
-          {
-            name: "Premium",
-            detail:
-              "15 selectable PDFs per week. Request from Download when your free quota is used.",
-          },
-          {
-            name: "Pro",
-            detail: "40 selectable PDFs per week.",
-          },
-          {
-            name: "Admin",
-            detail: "Unlimited selectable PDFs (internal).",
-          },
+        body: "Plans apply to high-resolution PDF exports (per calendar week). Image PDF and HTML stay available regardless of plan. Guests can use image PDF and HTML only.",
+        tableHeaders: {
+          plan: "Plan",
+          perWeek: "PDFs / week",
+        },
+        rows: [
+          { plan: "Free", perWeek: "3" },
+          { plan: "Premium", perWeek: "15" },
+          { plan: "Pro", perWeek: "40" },
         ],
-        note: "A shared monthly server capacity may also limit selectable exports for non-admin users when the service is busy.",
+        note: "Premium can be requested from Download when your free quota is used. A shared monthly server capacity may also limit high-resolution exports when the service is busy.",
       },
     },
   },
@@ -235,42 +224,33 @@ const copy = {
         body: "在幻灯片面板点击「下载」。共有三种导出格式：",
         items: [
           {
-            name: "PDF（可选中文字）",
-            detail:
-              "服务端打印的文字 PDF，清晰、可选中搜索。需 GitHub 登录，并占用每周配额。",
+            name: "HTML（演示模式）",
+            detail: "独立高清演示，任意浏览器可打开。",
           },
           {
             name: "PDF（图片）",
-            detail: "将每页渲染为图片。可离线使用，不占用可选中文字配额。",
+            detail: "分辨率有限的 PDF 文档。",
           },
           {
-            name: "HTML（演示模式）",
-            detail: "独立浏览器演示页，可本地打开或自行托管。",
+            name: "PDF（高清）",
+            detail:
+              "清晰可选中文字的高清 PDF。需 GitHub 登录，并占用每周配额。",
           },
         ],
       },
       plans: {
         title: "方案与配额",
-        body: "方案仅限制「可选中文字」PDF（按自然周）。图片 PDF 与 HTML 不受方案限制。未登录访客只能使用图片 PDF 与 HTML。",
-        items: [
-          {
-            name: "Free（免费）",
-            detail: "登录 GitHub 后，每周 3 次可选中文字 PDF。",
-          },
-          {
-            name: "Premium（高级）",
-            detail: "每周 15 次。免费配额用尽后可在下载面板申请。",
-          },
-          {
-            name: "Pro",
-            detail: "每周 40 次可选中文字 PDF。",
-          },
-          {
-            name: "Admin（管理员）",
-            detail: "可选中文字 PDF 无限制（内部）。",
-          },
+        body: "方案仅限制高清 PDF（按自然周）。图片 PDF 与 HTML 不受方案限制。未登录访客只能使用图片 PDF 与 HTML。",
+        tableHeaders: {
+          plan: "方案",
+          perWeek: "每周次数",
+        },
+        rows: [
+          { plan: "Free（免费）", perWeek: "3" },
+          { plan: "Premium（高级）", perWeek: "15" },
+          { plan: "Pro", perWeek: "40" },
         ],
-        note: "非管理员用户在服务繁忙时，还可能受每月共享服务端容量限制。",
+        note: "免费配额用尽后可在下载面板申请 Premium。服务繁忙时，还可能受每月共享服务端容量限制。",
       },
     },
   },
@@ -419,15 +399,30 @@ export function HelpDialog({
               <section>
                 <h3 className="font-semibold">{t.sections.plans.title}</h3>
                 <p className="mt-1 text-muted-foreground">{t.sections.plans.body}</p>
-                <ul className="mt-2 list-disc space-y-2 pl-5 text-muted-foreground">
-                  {t.sections.plans.items.map((item) => (
-                    <li key={item.name}>
-                      <span className="font-medium text-foreground">{item.name}</span>
-                      {" — "}
-                      {item.detail}
-                    </li>
-                  ))}
-                </ul>
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full min-w-[16rem] border-collapse text-left text-sm text-muted-foreground">
+                    <thead>
+                      <tr className="border-b border-white/15">
+                        <th className="py-2 pr-4 font-semibold text-foreground">
+                          {t.sections.plans.tableHeaders.plan}
+                        </th>
+                        <th className="py-2 font-semibold text-foreground">
+                          {t.sections.plans.tableHeaders.perWeek}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {t.sections.plans.rows.map((row) => (
+                        <tr key={row.plan} className="border-b border-white/10">
+                          <td className="py-2 pr-4 font-medium text-foreground">
+                            {row.plan}
+                          </td>
+                          <td className="py-2 tabular-nums">{row.perWeek}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
                 <p className="mt-2 text-xs text-muted-foreground">
                   {t.sections.plans.note}
                 </p>

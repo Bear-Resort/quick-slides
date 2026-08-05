@@ -33,12 +33,12 @@ const copy = {
     download: "Download",
     title: "Download",
     close: "Close",
-    selectable: "PDF (selectable text)",
-    selectableHint: "Clean text PDF via server print",
+    selectable: "PDF (high-resolution)",
+    selectableHint: "Clean text PDF with high resolution",
     image: "PDF (image)",
-    imageHint: "Rasterized slides — works offline",
+    imageHint: "PDF document with limited resolution",
     html: "HTML (presentation)",
-    htmlHint: "Standalone viewer in the browser",
+    htmlHint: "Standalone, high resolution view on any browser",
     remaining: "Remaining this week",
     unlimited: "Unlimited",
     signInRequired: "Sign in with GitHub to unlock",
@@ -61,12 +61,12 @@ const copy = {
     download: "下载",
     title: "下载",
     close: "关闭",
-    selectable: "PDF（可选中文字）",
-    selectableHint: "服务端打印的清晰文字 PDF",
+    selectable: "PDF（高清）",
+    selectableHint: "清晰可选中文字的高清 PDF",
     image: "PDF（图片）",
-    imageHint: "幻灯片截图 — 可离线使用",
+    imageHint: "分辨率有限的 PDF 文档",
     html: "HTML（演示模式）",
-    htmlHint: "独立浏览器演示页",
+    htmlHint: "独立高清演示，任意浏览器可打开",
     remaining: "本周剩余",
     unlimited: "无限制",
     signInRequired: "登录 GitHub 后可用",
@@ -325,6 +325,56 @@ export function SlideActions({
               <div className="mt-4 flex flex-col gap-2">
                 <button
                   type="button"
+                  disabled={busy}
+                  onClick={() => void handleHtmlExport()}
+                  className="glass-toolbar-action flex w-full items-start gap-3 rounded-lg border border-white/15 px-3 py-3 text-left"
+                >
+                  {exporting === "html" ? (
+                    <Loader2
+                      className="mt-0.5 size-4 shrink-0 animate-spin"
+                      aria-hidden
+                    />
+                  ) : (
+                    <FileCode2 className="mt-0.5 size-4 shrink-0" aria-hidden />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold">
+                      {exporting === "html" ? t.exportingHtml : t.html}
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {t.htmlHint}
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void handlePdfImageExport()}
+                  className="glass-toolbar-action flex w-full items-start gap-3 rounded-lg border border-white/15 px-3 py-3 text-left"
+                >
+                  {exporting === "pdf-image" ? (
+                    <Loader2
+                      className="mt-0.5 size-4 shrink-0 animate-spin"
+                      aria-hidden
+                    />
+                  ) : (
+                    <FileImage className="mt-0.5 size-4 shrink-0" aria-hidden />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold">
+                      {exporting === "pdf-image"
+                        ? t.exportingPdfImage
+                        : t.image}
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {t.imageHint}
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
                   disabled={
                     busy ||
                     entitlementLoading ||
@@ -390,56 +440,6 @@ export function SlideActions({
                     {t.openGithub}
                   </p>
                 ) : null}
-
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void handlePdfImageExport()}
-                  className="glass-toolbar-action flex w-full items-start gap-3 rounded-lg border border-white/15 px-3 py-3 text-left"
-                >
-                  {exporting === "pdf-image" ? (
-                    <Loader2
-                      className="mt-0.5 size-4 shrink-0 animate-spin"
-                      aria-hidden
-                    />
-                  ) : (
-                    <FileImage className="mt-0.5 size-4 shrink-0" aria-hidden />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold">
-                      {exporting === "pdf-image"
-                        ? t.exportingPdfImage
-                        : t.image}
-                    </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {t.imageHint}
-                    </p>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void handleHtmlExport()}
-                  className="glass-toolbar-action flex w-full items-start gap-3 rounded-lg border border-white/15 px-3 py-3 text-left"
-                >
-                  {exporting === "html" ? (
-                    <Loader2
-                      className="mt-0.5 size-4 shrink-0 animate-spin"
-                      aria-hidden
-                    />
-                  ) : (
-                    <FileCode2 className="mt-0.5 size-4 shrink-0" aria-hidden />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold">
-                      {exporting === "html" ? t.exportingHtml : t.html}
-                    </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {t.htmlHint}
-                    </p>
-                  </div>
-                </button>
               </div>
 
               {statusMessage ? (
