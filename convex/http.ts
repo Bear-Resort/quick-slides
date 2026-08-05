@@ -38,6 +38,15 @@ const ALLOWED_PATHS = new Set([
 const DEFAULT_BROWSERLESS_PDF_URL =
   "https://production-sfo.browserless.io/pdf";
 
+/** Convex injects deployment env on `process.env`; avoid Node typings in app tsc. */
+function convexEnv(name: string): string | undefined {
+  const proc = (
+    globalThis as { process?: { env?: Record<string, string | undefined> } }
+  ).process;
+  const value = proc?.env?.[name];
+  return typeof value === "string" ? value : undefined;
+}
+
 /** Keep payloads reasonable for Browserless free tier (images are JPEG-compressed client-side). */
 const MAX_HTML_CHARS = 5_000_000;
 
@@ -154,7 +163,7 @@ http.route({
       );
     }
 
-    const token = process.env.BROWSERLESS_API_TOKEN?.trim();
+    const token = convexEnv("BROWSERLESS_API_TOKEN")?.trim();
     if (!token) {
       return new Response(
         JSON.stringify({
@@ -257,7 +266,7 @@ http.route({
     }
 
     const baseUrl =
-      process.env.BROWSERLESS_PDF_URL?.trim() || DEFAULT_BROWSERLESS_PDF_URL;
+      convexEnv("BROWSERLESS_PDF_URL")?.trim() || DEFAULT_BROWSERLESS_PDF_URL;
     const endpoint = new URL(baseUrl);
     endpoint.searchParams.set("token", token);
 
