@@ -1,10 +1,15 @@
 import {
+  needsOpfsWorkerWrites,
   readFileBlob,
   readTextFile,
   writeBinaryFile,
   writeTextFile,
 } from "@/lib/library/fsAccess";
-import { registerChildHandle } from "@/lib/library/handlePaths";
+import { getHandlePath, registerChildHandle } from "@/lib/library/handlePaths";
+import {
+  opfsWorkerWriteBinary,
+  opfsWorkerWriteText,
+} from "@/lib/library/opfsWorkerClient";
 
 export type RepoFileEntry = {
   name: string;
@@ -206,6 +211,16 @@ export async function writeRepoTextFile(
   const parts = splitPath(path);
   const name = parts.pop();
   if (!name) throw new Error("Invalid path");
+
+  const rootPath = getHandlePath(root);
+  if (rootPath && needsOpfsWorkerWrites()) {
+    await opfsWorkerWriteText([...rootPath, ...parts, name], contents);
+    if (parts.length > 0) {
+      await resolveDirectory(root, parts.join("/"), true);
+    }
+    return;
+  }
+
   const parent = await resolveDirectory(root, parts.join("/"), true);
   await writeTextFile(parent, name, contents);
 }
@@ -218,8 +233,21 @@ export async function writeRepoBinaryFile(
   const parts = splitPath(path);
   const name = parts.pop();
   if (!name) throw new Error("Invalid path");
+
+  const buffer =
+    data instanceof ArrayBuffer ? data : await data.arrayBuffer();
+
+  const rootPath = getHandlePath(root);
+  if (rootPath && needsOpfsWorkerWrites()) {
+    await opfsWorkerWriteBinary([...rootPath, ...parts, name], buffer);
+    if (parts.length > 0) {
+      await resolveDirectory(root, parts.join("/"), true);
+    }
+    return;
+  }
+
   const parent = await resolveDirectory(root, parts.join("/"), true);
-  await writeBinaryFile(parent, name, data);
+  await writeBinaryFile(parent, name, buffer);
 }
 
 export async function createRepoFile(
@@ -288,15 +316,33 @@ async function copyDirectory(
   }
 }
 
+function isNotFoundError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === "NotFoundError") {
+    return true;
+  }
+  if (!(error instanceof Error)) return false;
+  return /can not be found|could not be found|NotFoundError/i.test(error.message);
+}
+
 export async function removeRepoPath(
   root: FileSystemDirectoryHandle,
   path: string,
 ): Promise<void> {
-  const { parent, name } = await resolveParent(root, path);
   try {
-    await parent.removeEntry(name, { recursive: true });
-  } catch {
-    await parent.removeEntry(name);
+    const { parent, name } = await resolveParent(root, path);
+    try {
+      await parent.removeEntry(name, { recursive: true });
+    } catch (error) {
+      if (isNotFoundError(error)) return;
+      try {
+        await parent.removeEntry(name);
+      } catch (inner) {
+        if (!isNotFoundError(inner)) throw inner;
+      }
+    }
+  } catch (error) {
+    // Parent dir missing (e.g. reverting a deletion that already removed the file)
+    if (!isNotFoundError(error)) throw error;
   }
 }
 

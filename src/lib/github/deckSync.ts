@@ -8,11 +8,11 @@ import {
 } from "@/lib/library/deckFormat";
 import { readTextFile, writeJsonFile } from "@/lib/library/fsAccess";
 import {
-  decodeBase64ToBytes,
-  decodeBase64ToText,
   deleteFile,
   encodeBytesAsBase64,
   encodeTextAsBase64,
+  fetchFileBytes,
+  fetchFileText,
   getFileContent,
   getRepo,
   putFile,
@@ -364,19 +364,24 @@ export async function pullDeckFromGithub(options: {
 
   for (const [relative, remote] of remoteFiles) {
     if (relative.toLowerCase().endsWith(".crswap")) continue;
-    const file = await getFileContent(
-      link.owner,
-      link.repo,
-      remote.path,
-      link.branch,
-    );
-    if (!file?.content) continue;
 
     if (isTextPath(relative)) {
-      const text = decodeBase64ToText(file.content);
+      const text = await fetchFileText(
+        link.owner,
+        link.repo,
+        remote.path,
+        link.branch,
+      );
+      if (text === null) continue;
       await writeRepoTextFile(options.deckHandle, relative, text);
     } else {
-      const bytes = decodeBase64ToBytes(file.content);
+      const bytes = await fetchFileBytes(
+        link.owner,
+        link.repo,
+        remote.path,
+        link.branch,
+      );
+      if (!bytes) continue;
       const buffer = new ArrayBuffer(bytes.byteLength);
       new Uint8Array(buffer).set(bytes);
       await writeRepoBinaryFile(options.deckHandle, relative, buffer);

@@ -163,6 +163,8 @@ export function Editor() {
   const [hasScmChanges, setHasScmChanges] = useState(false);
   const [scmLineChanges, setScmLineChanges] = useState<ScmLineChange[]>([]);
   const [scmEpoch, setScmEpoch] = useState(0);
+  /** Bumped after pull so slide images re-resolve blob URLs. */
+  const [imageEpoch, setImageEpoch] = useState(0);
   const [auxFileText, setAuxFileText] = useState("");
   const [jsonUnlocked, setJsonUnlocked] = useState(false);
   const [jsonUnlockOpen, setJsonUnlockOpen] = useState(false);
@@ -942,6 +944,7 @@ export function Editor() {
       setAuxFileText("");
       setSaveStatus("saved");
       setScmEpoch((n) => n + 1);
+      setImageEpoch((n) => n + 1);
       const handle = deckHandleRef.current;
       const folderName = folderNameRef.current;
       if (handle && folderName) {
@@ -975,7 +978,7 @@ export function Editor() {
       if (!deckHandle || !deckId) return src;
       return resolveDeckImageSrc(deckHandle, deckId, src);
     },
-    [deckHandle, deckId],
+    [deckHandle, deckId, imageEpoch],
   );
 
   const storeImage = useCallback(

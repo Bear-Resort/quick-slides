@@ -1,7 +1,6 @@
 import {
-  decodeBase64ToBytes,
-  decodeBase64ToText,
-  getFileContent,
+  fetchFileBytes,
+  fetchFileText,
   listDirectory,
   type GithubContentFile,
 } from "@/lib/github/api";
@@ -74,14 +73,12 @@ export async function getRemoteText(
   link: DeckGithubLink,
   relativePath: string,
 ): Promise<string | null> {
-  const file = await getFileContent(
+  return fetchFileText(
     link.owner,
     link.repo,
     remotePath(link, relativePath),
     link.branch,
   );
-  if (!file?.content) return null;
-  return decodeBase64ToText(file.content);
 }
 
 export async function computeScmChanges(options: {
@@ -154,15 +151,16 @@ export async function revertFileFromRemote(options: {
   const link = getDeckGithubLink(options.deckId);
   if (!link) throw new Error("Not linked to a GitHub repository");
 
-  const remote = await getFileContent(
+  const apiPath = remotePath(link, options.path);
+  const bytes = await fetchFileBytes(
     link.owner,
     link.repo,
-    remotePath(link, options.path),
+    apiPath,
     link.branch,
   );
 
-  if (!remote?.content) {
-    // Untracked locally — delete local file
+  if (bytes === null) {
+    // Not on remote — revert means drop the local file (untracked).
     const { removeRepoPath } = await import("@/lib/github/workingTree");
     await removeRepoPath(options.deckHandle, options.path);
     return "removed";
@@ -172,10 +170,9 @@ export async function revertFileFromRemote(options: {
     await writeRepoTextFile(
       options.deckHandle,
       options.path,
-      decodeBase64ToText(remote.content),
+      new TextDecoder().decode(bytes),
     );
   } else {
-    const bytes = decodeBase64ToBytes(remote.content);
     const buffer = new ArrayBuffer(bytes.byteLength);
     new Uint8Array(buffer).set(bytes);
     await writeRepoBinaryFile(options.deckHandle, options.path, buffer);

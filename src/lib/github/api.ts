@@ -41,10 +41,16 @@ async function githubFetch(
   path: string,
   init: RequestInit = {},
 ): Promise<Response> {
-  const headers = new Headers(init.headers);
+  const headers = new Headers();
   const auth = authHeaders();
   for (const [key, value] of Object.entries(auth)) {
     headers.set(key, value as string);
+  }
+  // Caller headers win (e.g. Accept: application/vnd.github.raw).
+  if (init.headers) {
+    new Headers(init.headers).forEach((value, key) => {
+      headers.set(key, value);
+    });
   }
   return fetch(`${GITHUB_API}${path}`, { ...init, headers });
 }
@@ -198,6 +204,84 @@ export async function getFileContent(
     encoding: data.encoding,
     downloadUrl: data.download_url,
   };
+}
+
+/**
+ * Download file bytes from GitHub. Contents API omits base64 `content` for
+ * files over ~1MB — fall back to the Git Blobs API, then download_url / raw.
+ */
+export async function fetchFileBytes(
+  owner: string,
+  repo: string,
+  path: string,
+  ref?: string,
+): Promise<Uint8Array | null> {
+  const file = await getFileContent(owner, repo, path, ref);
+  if (!file) return null;
+
+  const hasInline =
+    Boolean(file.content) &&
+    file.encoding !== "none" &&
+    (file.encoding === "base64" || file.encoding === undefined);
+
+  if (hasInline && file.content) {
+    return decodeBase64ToBytes(file.content);
+  }
+
+  // Prefer Blobs API in the browser — raw.githubusercontent.com often fails CORS.
+  const blobResponse = await githubFetch(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/blobs/${encodeURIComponent(file.sha)}`,
+  );
+  if (blobResponse.ok) {
+    const blob = (await blobResponse.json()) as {
+      content?: string;
+      encoding?: string;
+    };
+    if (blob.content && blob.encoding === "base64") {
+      return decodeBase64ToBytes(blob.content);
+    }
+  }
+
+  if (file.downloadUrl) {
+    try {
+      const token = getAccessToken();
+      const headers: HeadersInit = { "User-Agent": USER_AGENT };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      const response = await fetch(file.downloadUrl, { headers });
+      if (response.ok) {
+        return new Uint8Array(await response.arrayBuffer());
+      }
+    } catch {
+      // CORS or network — try raw Accept below
+    }
+  }
+
+  // Contents API raw media type
+  const query = ref ? `?ref=${encodeURIComponent(ref)}` : "";
+  const rawResponse = await githubFetch(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/")}${query}`,
+    {
+      headers: { Accept: "application/vnd.github.raw" },
+    },
+  );
+  if (!rawResponse.ok) return null;
+  return new Uint8Array(await rawResponse.arrayBuffer());
+}
+
+export async function fetchFileText(
+  owner: string,
+  repo: string,
+  path: string,
+  ref?: string,
+): Promise<string | null> {
+  const bytes = await fetchFileBytes(owner, repo, path, ref);
+  if (!bytes) return null;
+  return new TextDecoder().decode(bytes);
 }
 
 export async function listDirectory(

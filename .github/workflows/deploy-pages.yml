@@ -35,10 +35,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm build
+      # Pushes Convex functions, then builds with VITE_CONVEX_URL injected for prod.
+      - name: Deploy Convex and build frontend
+        run: npx convex deploy --cmd-url-env-var-name VITE_CONVEX_URL --cmd 'node scripts/ci-build.mjs'
         env:
           GITHUB_PAGES: "true"
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
           VITE_GITHUB_CLIENT_ID: ${{ secrets.VITE_GITHUB_CLIENT_ID }}
           VITE_GITHUB_OAUTH_PROXY: ${{ secrets.VITE_GITHUB_OAUTH_PROXY }}
 
