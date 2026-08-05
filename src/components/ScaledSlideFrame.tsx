@@ -30,10 +30,15 @@ function isAppleWebKit(): boolean {
   return typeof CSS !== "undefined" && CSS.supports("font: -apple-system-body");
 }
 
-/** Prefer CSS zoom over transform:scale when available. */
+/**
+ * Prefer CSS zoom over transform:scale when available.
+ * Safari uses MathJax SVG paint instead of live KaTeX, so it can keep
+ * transform:scale (zoom was making the preview chrome look oversized).
+ */
 function preferZoomScale(): boolean {
   if (typeof CSS === "undefined") return false;
-  return CSS.supports("zoom", "1") || isAppleWebKit();
+  if (isAppleWebKit()) return false;
+  return CSS.supports("zoom", "1");
 }
 
 export function ScaledSlideFrame({

@@ -54,10 +54,26 @@
   }
 
   /*
-   * Safari drops color-mix(in oklch, …) rules, so bar buttons inherit the bar
-   * color and become indistinguishable from labels.
+   * Safari expands buttons toward ~44px touch targets, which blows up the
+   * compact "Slide N" chrome bar. Keep it tight to match other browsers.
    */
+  .slide-frame-bar {
+    box-sizing: border-box;
+    min-height: 2rem;
+    max-height: 2rem;
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+
   .slide-frame-bar .slide-locate-btn {
+    box-sizing: border-box;
+    width: 1.5rem !important;
+    height: 1.5rem !important;
+    min-width: 1.5rem !important;
+    min-height: 1.5rem !important;
+    max-width: 1.5rem !important;
+    max-height: 1.5rem !important;
+    padding: 0 !important;
     border: 1px solid rgba(255, 255, 255, 0.35);
     background-color: rgba(255, 255, 255, 0.12);
     color: inherit;
