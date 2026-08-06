@@ -232,7 +232,7 @@ export function MarkdownPreview({
   return (
     <div
       className={cn(
-        "markdown-preview leading-relaxed [&_a]:text-blue-600 dark:[&_a]:text-blue-400",
+        "markdown-preview leading-relaxed",
         isSlide ? "slide-content space-y-3" : "space-y-4 text-sm",
         isSlide && slideSize === "present" && "space-y-5",
         className,

@@ -1817,7 +1817,7 @@ html.energy-save .glass-toolbar-action.glass-close:hover:not(:disabled) {
 .hljs-keyword,
 .hljs-selector-tag,
 .hljs-addition {
-  color: #0550ae;
+  color: #2f6fed;
 }
 
 .hljs-number,
@@ -1826,7 +1826,7 @@ html.energy-save .glass-toolbar-action.glass-close:hover:not(:disabled) {
 .hljs-literal,
 .hljs-doctag,
 .hljs-regexp {
-  color: #0a3069;
+  color: #0550ae;
 }
 
 .hljs-title,
@@ -1834,7 +1834,7 @@ html.energy-save .glass-toolbar-action.glass-close:hover:not(:disabled) {
 .hljs-name,
 .hljs-selector-id,
 .hljs-selector-class {
-  color: #953800;
+  color: #bf5700;
 }
 
 .hljs-attribute,
@@ -1843,7 +1843,7 @@ html.energy-save .glass-toolbar-action.glass-close:hover:not(:disabled) {
 .hljs-template-variable,
 .hljs-class .hljs-title,
 .hljs-type {
-  color: #116329;
+  color: #1a7f37;
 }
 
 .hljs-symbol,
@@ -1858,7 +1858,7 @@ html.energy-save .glass-toolbar-action.glass-close:hover:not(:disabled) {
 }
 
 .hljs-deletion {
-  color: #cf222e;
+  color: #e5534b;
 }
 
 .hljs-emphasis {
@@ -1875,7 +1875,7 @@ html.energy-save .glass-toolbar-action.glass-close:hover:not(:disabled) {
 .night .hljs-keyword,
 .night .hljs-selector-tag,
 .night .hljs-addition {
-  color: #79c0ff;
+  color: #58a6ff;
 }
 
 .slide-color-dark .hljs-number,
@@ -1890,7 +1890,7 @@ html.energy-save .glass-toolbar-action.glass-close:hover:not(:disabled) {
 .night .hljs-literal,
 .night .hljs-doctag,
 .night .hljs-regexp {
-  color: #a5d6ff;
+  color: #79c0ff;
 }
 
 .slide-color-dark .hljs-title,
@@ -1903,7 +1903,7 @@ html.energy-save .glass-toolbar-action.glass-close:hover:not(:disabled) {
 .night .hljs-name,
 .night .hljs-selector-id,
 .night .hljs-selector-class {
-  color: #ffa657;
+  color: #e3b341;
 }
 
 .slide-color-dark .hljs-attribute,
@@ -1918,7 +1918,7 @@ html.energy-save .glass-toolbar-action.glass-close:hover:not(:disabled) {
 .night .hljs-template-variable,
 .night .hljs-class .hljs-title,
 .night .hljs-type {
-  color: #7ee787;
+  color: #3fb950;
 }
 
 .slide-color-dark .hljs-symbol,
@@ -1937,12 +1937,26 @@ html.energy-save .glass-toolbar-action.glass-close:hover:not(:disabled) {
 .night .hljs-selector-pseudo,
 .night .hljs-built_in,
 .night .hljs-builtin-name {
-  color: #d2a8ff;
+  color: #bc8cff;
 }
 
 .slide-color-dark .hljs-deletion,
 .night .hljs-deletion {
-  color: #ffa198;
+  color: #f85149;
+}
+
+/* Markdown links — darker on light surfaces, lighter on dark */
+.markdown-preview a {
+  color: #1e40af;
+}
+
+.slide-color-dark .markdown-preview a,
+.night .markdown-preview a {
+  color: #93c5fd;
+}
+
+.slide-color-light .markdown-preview a {
+  color: #1e40af;
 }
 
 .slide-theme-tinted .slide-canvas {
