@@ -367,6 +367,28 @@ export function prepareSlideForCapture(root: HTMLElement): HTMLElement {
 
   inlineVisualStylesTree(pageRoot);
 
+  // Regular theme: force pure white/black after inlining — never inherit app chrome gray fills.
+  if (pageRoot.classList.contains("slide-theme-regular")) {
+    const isDark = pageRoot.classList.contains("slide-color-dark");
+    const solid = isDark ? "#18181b" : "#ffffff";
+    pageRoot.style.background = solid;
+    pageRoot.style.backgroundImage = "none";
+    for (const element of [frame, canvas]) {
+      if (!element) continue;
+      element.style.background = solid;
+      element.style.backgroundImage = "none";
+      element.style.boxShadow = "none";
+    }
+    pageRoot
+      .querySelectorAll<HTMLElement>(
+        ".slide-content-heading, .slide-primary-heading",
+      )
+      .forEach((heading) => {
+        heading.style.background = "transparent";
+        heading.style.backgroundImage = "none";
+      });
+  }
+
   pageRoot.querySelectorAll<HTMLElement>(".katex-display").forEach((element) => {
     element.style.display = "block";
     element.style.textAlign = "center";
@@ -377,9 +399,21 @@ export function prepareSlideForCapture(root: HTMLElement): HTMLElement {
 }
 
 export function getCaptureBackgroundColor(target: HTMLElement): string {
+  const root =
+    target.closest<HTMLElement>(".export-slide-page, .slide-theme-regular, .slide-theme-tinted") ??
+    target;
+  const isRegular = root.classList.contains("slide-theme-regular");
+  const isDark =
+    root.classList.contains("slide-color-dark") ||
+    Boolean(root.closest(".slide-color-dark"));
+
+  if (isRegular) {
+    return isDark ? "#18181b" : "#ffffff";
+  }
+
   const bg = getComputedStyle(target).backgroundColor;
   if (!bg || bg === "rgba(0, 0, 0, 0)" || bg === "transparent") {
-    return "#ffffff";
+    return isDark ? "#18181b" : "#ffffff";
   }
   return bg;
 }

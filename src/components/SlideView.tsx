@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { SlideFitContent } from "@/components/SlideFitContent";
 import { SlideImagePanel } from "@/components/SlideImage";
+import { MarkdownCode } from "@/lib/markdownCode";
 import { markdownRehypePlugins } from "@/lib/markdownRehype";
 import { normalizeDisplayMath, prepareSlideMarkdown } from "@/lib/markdown";
 import { resolvePlaceholdersForSlide } from "@/lib/editorPlaceholders";
@@ -99,23 +100,17 @@ function createSlideComponents(layout: SlideLayoutType) {
     }: {
       className?: string;
       children?: ReactNode;
-    }) => {
-      const isBlock = codeClassName?.includes("language-");
-      if (isBlock) {
-        return (
-          <code className="slide-code-bg block overflow-x-auto rounded-lg p-[0.85em] font-mono text-[0.875em] text-left">
-            {children}
-          </code>
-        );
-      }
-      return (
-        <code className="slide-inline-code slide-code-bg rounded px-1.5 py-0.5 font-mono">
-          {children}
-        </code>
-      );
-    },
+    }) => (
+      <MarkdownCode
+        className={codeClassName}
+        blockClassName="text-[0.875em]"
+        inlineClassName="slide-inline-code slide-code-bg rounded px-1.5 py-0.5"
+      >
+        {children}
+      </MarkdownCode>
+    ),
     pre: ({ children }: { children?: ReactNode }) => (
-      <pre className="slide-code-bg overflow-x-auto rounded-lg p-[0.85em] font-mono text-[0.875em] text-left">
+      <pre className="slide-code-bg slide-code-block overflow-x-auto rounded-lg p-[0.85em] text-left text-[0.875em]">
         {children}
       </pre>
     ),

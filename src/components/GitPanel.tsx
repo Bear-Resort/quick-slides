@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  GitBranch,
   Github,
   LogOut,
   Minus,
@@ -11,9 +12,18 @@ import {
   Search,
   X,
 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { WorkspacePanel } from "@/components/WorkspacePanel";
 import { DialogPortal } from "@/components/ui/dialog-portal";
-import { createRepo, getOrCreateSharedLibraryRepo, listRepos, SHARED_LIBRARY_REPO_NAME, type GithubRepo } from "@/lib/github/api";
+import { useToast } from "@/components/ui/toaster";
+import {
+  createRepo,
+  getOrCreateSharedLibraryRepo,
+  getPublicRepo,
+  listRepos,
+  SHARED_LIBRARY_REPO_NAME,
+  type GithubRepo,
+} from "@/lib/github/api";
 import {
   getAuthStatus,
   githubDevicePoll,
@@ -29,6 +39,7 @@ import {
   getDeckGithubLink,
   isSharedLibraryRepo,
   linkForDeckRepo,
+  linkFromRepo,
   pullDeckFromGithub,
   formatContentUpdateMessage,
   PushConflictError,
@@ -91,6 +102,7 @@ const copy = {
     signOut: "Sign out",
     waiting: "Waiting for authorization…",
     openGithub: "Open GitHub",
+    cancelAuth: "Cancel",
     userCode: "Enter this code on GitHub",
     signedInAs: "Signed in as",
     repos: "Your repositories",
@@ -125,6 +137,9 @@ const copy = {
     forcePush: "Force push",
     forceConfirm:
       "Force push overwrites the remote with your local files. Continue?",
+    revertAll: "Revert all",
+    revertAllConfirm:
+      "Revert all local changes to match the remote? Local edits will be lost.",
     pull: "Pull",
     pullMerge: "Pull (take remote)",
     refresh: "Refresh",
@@ -134,14 +149,29 @@ const copy = {
     pullOk: "Pulled from GitHub.",
     pullSkippedKeepLocal: "Linked. Kept your local files.",
     pullSkippedEmpty: "Linked. Remote has no files yet.",
+    keepLocalTitle: "Keep local files?",
     keepLocalConfirm:
-      "This presentation already has local files. Keep them?\n\nOK — keep local (link only)\nCancel — replace with the repository",
+      "This presentation already has local files.\n\nKeep local — link only\nReplace — overwrite with the repository",
+    keepLocal: "Keep local",
+    replaceRemote: "Replace with remote",
     conflictHint:
       "Remote changed. Pull to take remote, or Force push to keep local.",
     noClientId:
       "Set VITE_GITHUB_CLIENT_ID in .env.local to enable GitHub sign-in.",
     createDeckFailed: "Could not create a local presentation for this repository.",
     emptyRepos: "No repositories found.",
+    publicRepo: "Open public repository",
+    publicRepoHint:
+      "After signing in, load any public repo as read-only (owner/name). Sign-in is only for API rate limits — the deck stays read-only.",
+    publicRepoPlaceholder: "owner/repo",
+    publicRepoAction: "Open read-only",
+    publicRepoOk: "Opened public repository (read-only).",
+    publicRepoNeedSignIn: "Sign in first to open a public repository (GitHub API rate limits).",
+    rateLimitHint:
+      "GitHub API rate limit reached. Sign in (or wait) and try again — authenticated requests get a much higher limit.",
+    readOnlyBadge: "Read-only",
+    toastError: "Error",
+    toastSuccess: "Done",
     changes: "Changes",
     staged: "Included for push",
     unstaged: "Changes",
@@ -169,6 +199,7 @@ const copy = {
     signOut: "退出登录",
     waiting: "等待授权…",
     openGithub: "打开 GitHub",
+    cancelAuth: "取消",
     userCode: "在 GitHub 输入此代码",
     signedInAs: "已登录",
     repos: "你的仓库",
@@ -201,6 +232,8 @@ const copy = {
     quickPush: "一键推送全部",
     forcePush: "强制推送",
     forceConfirm: "强制推送会用本地文件覆盖远程，确定继续？",
+    revertAll: "全部还原",
+    revertAllConfirm: "将全部本地更改还原为远程版本？本地修改将丢失。",
     pull: "拉取",
     pullMerge: "拉取（采用远程）",
     refresh: "刷新",
@@ -210,12 +243,27 @@ const copy = {
     pullOk: "已从 GitHub 拉取。",
     pullSkippedKeepLocal: "已关联。已保留本地文件。",
     pullSkippedEmpty: "已关联。远程尚无文件。",
+    keepLocalTitle: "保留本地文件？",
     keepLocalConfirm:
-      "当前演示文稿已有本地文件。要保留吗？\n\n确定 — 保留本地（仅关联）\n取消 — 用仓库内容覆盖",
+      "当前演示文稿已有本地文件。\n\n保留本地 — 仅关联\n替换 — 用仓库内容覆盖",
+    keepLocal: "保留本地",
+    replaceRemote: "用远程覆盖",
     conflictHint: "远程有变更。可拉取采用远程，或强制推送保留本地。",
     noClientId: "请在 .env.local 中设置 VITE_GITHUB_CLIENT_ID 以启用 GitHub 登录。",
     createDeckFailed: "无法为此仓库创建本地演示文稿。",
     emptyRepos: "未找到仓库。",
+    publicRepo: "打开公开仓库",
+    publicRepoHint:
+      "登录后可以只读打开任意公开仓库（owner/name）。登录仅用于提高 API 限额，演示文稿仍为只读。",
+    publicRepoPlaceholder: "owner/repo",
+    publicRepoAction: "只读打开",
+    publicRepoOk: "已打开公开仓库（只读）。",
+    publicRepoNeedSignIn: "请先登录再打开公开仓库（受 GitHub API 速率限制）。",
+    rateLimitHint:
+      "已达到 GitHub API 速率限制。请先登录（或稍后再试）— 登录后限额更高。",
+    readOnlyBadge: "只读",
+    toastError: "错误",
+    toastSuccess: "完成",
     changes: "更改",
     staged: "已纳入推送",
     unstaged: "更改",
@@ -260,6 +308,7 @@ export function GitPanel({
 }: GitPanelProps) {
   const language = useLanguage();
   const t = copy[language];
+  const { toast } = useToast();
   const isGithub = variant === "github";
 
   const [auth, setAuth] = useState<GithubAuthStatus>(() => getAuthStatus());
@@ -271,8 +320,6 @@ export function GitPanel({
   const [link, setLink] = useState<DeckGithubLink | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [tokenDraft, setTokenDraft] = useState("");
   const [showTokenForm, setShowTokenForm] = useState(false);
@@ -280,9 +327,34 @@ export function GitPanel({
   const [newRepoPrivate, setNewRepoPrivate] = useState(true);
   const [createRepoOpen, setCreateRepoOpen] = useState(false);
   const [scmChanges, setScmChanges] = useState<ScmFileChange[]>([]);
+  const [publicRepoDraft, setPublicRepoDraft] = useState("");
+  const [forceConfirmOpen, setForceConfirmOpen] = useState(false);
+  const [revertAllConfirmOpen, setRevertAllConfirmOpen] = useState(false);
+  const [revertPathConfirm, setRevertPathConfirm] = useState<string | null>(
+    null,
+  );
+  const [keepLocalPrompt, setKeepLocalPrompt] = useState<{
+    id: string;
+    handle: FileSystemDirectoryHandle;
+    next: DeckGithubLink;
+  } | null>(null);
 
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollCancelledRef = useRef(false);
+
+  const showError = useCallback(
+    (description: string) => {
+      toast({ type: "error", title: t.toastError, description });
+    },
+    [toast, t.toastError],
+  );
+
+  const showInfo = useCallback(
+    (description: string) => {
+      toast({ type: "success", title: t.toastSuccess, description });
+    },
+    [toast, t.toastSuccess],
+  );
 
   const clearPoll = useCallback(() => {
     pollCancelledRef.current = true;
@@ -294,7 +366,6 @@ export function GitPanel({
 
   const loadRepos = useCallback(async () => {
     setBusy(true);
-    setError(null);
     try {
       const status = await refreshAuthStatus();
       setAuth(status);
@@ -305,12 +376,12 @@ export function GitPanel({
       const next = await listRepos();
       setRepos(next);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      showError(err instanceof Error ? err.message : String(err));
       setRepos([]);
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [showError]);
 
   const refreshScm = useCallback(async () => {
     if (!deckId || !deckHandle || !getDeckGithubLink(deckId)) {
@@ -326,17 +397,15 @@ export function GitPanel({
       });
       setScmChanges(changes);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      showError(err instanceof Error ? err.message : String(err));
     }
-  }, [deckId, deckHandle]);
+  }, [deckId, deckHandle, showError]);
 
   useEffect(() => {
     if (!open) {
       clearPoll();
       return;
     }
-    setError(null);
-    setInfo(null);
     setCreateRepoOpen(false);
     setAuth(getAuthStatus());
     setLink(deckId ? getDeckGithubLink(deckId) : null);
@@ -413,40 +482,56 @@ export function GitPanel({
     const remoteFiles = await listRemoteDeckFiles(next);
 
     if (remoteFiles.size === 0) {
-      setInfo(`${t.linked}: ${formatDeckGithubLinkLabel(next)}. ${t.pullSkippedEmpty}`);
+      showInfo(`${t.linked}: ${formatDeckGithubLinkLabel(next)}. ${t.pullSkippedEmpty}`);
       onDeckLinked?.(id);
       return;
     }
 
-    let shouldPull = true;
     if (!created) {
-      // Existing local presentation — ask before overwriting.
-      shouldPull = !window.confirm(t.keepLocalConfirm);
+      setKeepLocalPrompt({ id, handle, next });
+      return;
     }
 
-    if (!shouldPull) {
-      setInfo(
+    showInfo(t.pulling);
+    const pulled = await pullDeckFromGithub({ deckId: id, deckHandle: handle });
+    if (!deckId || deckId === id) {
+      onPulled?.(pulled);
+    }
+    showInfo(`${t.linked}: ${formatDeckGithubLinkLabel(next)}. ${t.pullOk}`);
+    onDeckLinked?.(id);
+  };
+
+  const applyKeepLocalChoice = async (keepLocal: boolean) => {
+    const pending = keepLocalPrompt;
+    if (!pending) return;
+    setKeepLocalPrompt(null);
+    const { id, handle, next } = pending;
+    if (keepLocal) {
+      showInfo(
         `${t.linked}: ${formatDeckGithubLinkLabel(next)}. ${t.pullSkippedKeepLocal}`,
       );
       onDeckLinked?.(id);
       return;
     }
-
-    setInfo(t.pulling);
-    const pulled = await pullDeckFromGithub({ deckId: id, deckHandle: handle });
-    // Refresh editor only if we're already on this deck; otherwise navigation reloads from disk.
-    if (!deckId || deckId === id) {
-      onPulled?.(pulled);
+    setBusy(true);
+    try {
+      showInfo(t.pulling);
+      const pulled = await pullDeckFromGithub({ deckId: id, deckHandle: handle });
+      if (!deckId || deckId === id) {
+        onPulled?.(pulled);
+      }
+      showInfo(`${t.linked}: ${formatDeckGithubLinkLabel(next)}. ${t.pullOk}`);
+      onDeckLinked?.(id);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
     }
-    setInfo(`${t.linked}: ${formatDeckGithubLinkLabel(next)}. ${t.pullOk}`);
-    onDeckLinked?.(id);
   };
 
   const startDeviceFlow = async () => {
     clearPoll();
     pollCancelledRef.current = false;
-    setError(null);
-    setInfo(null);
     setBusy(true);
     try {
       const start = await githubDeviceStart();
@@ -476,7 +561,7 @@ export function GitPanel({
         } else if (result.status === "pending") {
           setDeviceStatus(t.waiting);
         } else {
-          setError(result.message || result.status);
+          showError(result.message || result.status);
           setUserCode(null);
           setVerificationUri(null);
           setDeviceStatus(null);
@@ -493,15 +578,13 @@ export function GitPanel({
       }, intervalMs);
     } catch (err) {
       const text = err instanceof Error ? err.message : String(err);
-      setError(text.includes("VITE_GITHUB_CLIENT_ID") ? t.noClientId : text);
+      showError(text.includes("VITE_GITHUB_CLIENT_ID") ? t.noClientId : text);
       setBusy(false);
     }
   };
 
   const handleTokenSignIn = async () => {
     setBusy(true);
-    setError(null);
-    setInfo(null);
     try {
       const next = await signInWithAccessToken(tokenDraft);
       setAuth(next);
@@ -509,7 +592,7 @@ export function GitPanel({
       setShowTokenForm(false);
       await loadRepos();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      showError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -525,9 +608,16 @@ export function GitPanel({
     setDeviceStatus(null);
   };
 
+  const cancelDeviceFlow = () => {
+    clearPoll();
+    setUserCode(null);
+    setVerificationUri(null);
+    setDeviceStatus(null);
+    setBusy(false);
+  };
+
   const handleLink = async (repo: GithubRepo) => {
     setBusy(true);
-    setError(null);
     try {
       const { id, handle, created } = await ensureDeckForLink(
         isSharedLibraryRepo(repo)
@@ -537,7 +627,45 @@ export function GitPanel({
       const next = linkForDeckRepo(repo, id);
       await finishLink({ id, handle, next, created });
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      showError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleOpenPublicRepo = async () => {
+    if (!auth.signedIn) {
+      showError(t.publicRepoNeedSignIn);
+      return;
+    }
+    const raw = publicRepoDraft.trim().replace(/^https?:\/\/github\.com\//i, "");
+    const match = raw.match(/^([^/\s]+)\/([^/\s#?]+)/);
+    if (!match) {
+      showError(t.publicRepoPlaceholder);
+      return;
+    }
+    const owner = match[1]!;
+    const repoName = match[2]!.replace(/\.git$/i, "");
+    setBusy(true);
+    try {
+      const repo = await getPublicRepo(owner, repoName);
+      const root = await ensureBrowserLibraryRoot();
+      if (!root) throw new Error(t.createDeckFailed);
+      const deck = await createDeck(root, repo.name, language);
+      const next = linkFromRepo(repo, { readOnly: true });
+      await finishLink({
+        id: deck.folderName,
+        handle: deck.handle,
+        next,
+        created: true,
+      });
+      showInfo(t.publicRepoOk);
+      setPublicRepoDraft("");
+    } catch (err) {
+      const text = err instanceof Error ? err.message : String(err);
+      showError(
+        /rate limit/i.test(text) ? t.rateLimitHint : text,
+      );
     } finally {
       setBusy(false);
     }
@@ -551,7 +679,6 @@ export function GitPanel({
 
   const handleCreateCustomRepo = async () => {
     setBusy(true);
-    setError(null);
     try {
       const name = newRepoName.trim() || defaultRepoName(deckTitle);
       if (name === SHARED_LIBRARY_REPO_NAME) {
@@ -572,7 +699,7 @@ export function GitPanel({
       setCreateRepoOpen(false);
       await loadRepos();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      showError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -580,7 +707,6 @@ export function GitPanel({
 
   const handleUseSharedLibrary = async () => {
     setBusy(true);
-    setError(null);
     try {
       const { id, handle, created } = await ensureDeckForLink(
         deckTitle || getDefaultPresentationFilename(language),
@@ -591,7 +717,7 @@ export function GitPanel({
       setCreateRepoOpen(false);
       await loadRepos();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      showError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -604,8 +730,6 @@ export function GitPanel({
   }) => {
     if (!deckId || !deckHandle) return;
     setBusy(true);
-    setError(null);
-    setInfo(null);
     setConflict(false);
     try {
       const commitMessage = options.useTimestampMessage
@@ -619,15 +743,15 @@ export function GitPanel({
         force: options.force,
       });
       clearStaged(deckId);
-      setInfo(`${t.pushOk} (${commitMessage})`);
+      showInfo(`${t.pushOk} (${commitMessage})`);
       await refreshScm();
       onScmChanged?.();
     } catch (err) {
       if (err instanceof PushConflictError) {
         setConflict(true);
-        setError(`${t.conflictHint}\n${err.message}`);
+        showError(`${t.conflictHint}\n${err.message}`);
       } else {
-        setError(err instanceof Error ? err.message : String(err));
+        showError(err instanceof Error ? err.message : String(err));
       }
     } finally {
       setBusy(false);
@@ -646,7 +770,11 @@ export function GitPanel({
   };
 
   const handleForcePush = async () => {
-    if (!window.confirm(t.forceConfirm)) return;
+    setForceConfirmOpen(true);
+  };
+
+  const confirmForcePush = async () => {
+    setForceConfirmOpen(false);
     await runPush({
       force: true,
       useTimestampMessage: !message.trim(),
@@ -668,19 +796,47 @@ export function GitPanel({
   };
 
   const handleRevert = async (path: string) => {
-    if (!deckId || !deckHandle) return;
-    if (!window.confirm(`Revert “${path}”? Local changes will be lost.`)) return;
+    setRevertPathConfirm(path);
+  };
+
+  const confirmRevertPath = async () => {
+    const path = revertPathConfirm;
+    if (!path || !deckId || !deckHandle) return;
+    setRevertPathConfirm(null);
     setBusy(true);
-    setError(null);
     try {
       await revertFileFromRemote({ deckId, deckHandle, path });
       unstagePath(deckId, path);
       await refreshScm();
       onScmChanged?.();
       onOpenFile?.(path);
-      setInfo(`${t.revertFile}: ${path}`);
+      showInfo(`${t.revertFile}: ${path}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      showError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRevertAll = async () => {
+    setRevertAllConfirmOpen(true);
+  };
+
+  const confirmRevertAll = async () => {
+    if (!deckId || !deckHandle) return;
+    setRevertAllConfirmOpen(false);
+    setBusy(true);
+    try {
+      const paths = scmChanges.map((c) => c.path);
+      for (const path of paths) {
+        await revertFileFromRemote({ deckId, deckHandle, path });
+        unstagePath(deckId, path);
+      }
+      await refreshScm();
+      onScmChanged?.();
+      showInfo(t.revertAll);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -689,17 +845,15 @@ export function GitPanel({
   const handlePull = async () => {
     if (!deckId || !deckHandle) return;
     setBusy(true);
-    setError(null);
-    setInfo(null);
     setConflict(false);
     try {
       const pulled = await pullDeckFromGithub({ deckId, deckHandle });
       onPulled?.(pulled);
-      setInfo(t.pullOk);
+      showInfo(t.pullOk);
       await refreshScm();
       onScmChanged?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      showError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -714,31 +868,25 @@ export function GitPanel({
     );
   });
 
+  const isReadOnly = Boolean(link?.readOnly);
+
   return (
     <WorkspacePanel
       open={open}
       title={isGithub ? t.githubTitle : t.gitTitle}
       onClose={onClose}
+      titleIcon={isGithub ? Github : GitBranch}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3">
-        {error ? (
-          <p className="shrink-0 whitespace-pre-wrap text-xs font-medium text-red-600 dark:text-red-400">
-            {error}
-          </p>
-        ) : null}
-        {info ? (
-          <p className="shrink-0 text-xs text-muted-foreground">{info}</p>
-        ) : null}
-
         {isGithub ? (
           <>
             {!auth.signedIn && !userCode ? (
-              <div className="space-y-2">
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2">
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => void startDeviceFlow()}
-                  className="glass-primary inline-flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  className="glass-primary inline-flex w-full max-w-sm items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
                 >
                   <Github className="size-4" aria-hidden />
                   {t.signIn}
@@ -747,12 +895,12 @@ export function GitPanel({
                   type="button"
                   disabled={busy}
                   onClick={() => setShowTokenForm((openForm) => !openForm)}
-                  className="glass-toolbar-action inline-flex w-full items-center justify-center rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                  className="glass-toolbar-action inline-flex w-full max-w-sm items-center justify-center rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold disabled:opacity-50"
                 >
                   {t.signInToken}
                 </button>
                 {showTokenForm ? (
-                  <div className="space-y-2 rounded-lg border border-white/10 p-3">
+                  <div className="w-full max-w-sm space-y-2 rounded-lg border border-white/10 p-3">
                     <p className="text-[11px] text-muted-foreground">
                       {t.tokenHelp}
                     </p>
@@ -796,6 +944,13 @@ export function GitPanel({
                 {deviceStatus ? (
                   <p className="text-xs text-muted-foreground">{deviceStatus}</p>
                 ) : null}
+                <button
+                  type="button"
+                  onClick={cancelDeviceFlow}
+                  className="glass-toolbar-action inline-flex w-full items-center justify-center rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold"
+                >
+                  {t.cancelAuth}
+                </button>
               </div>
             ) : null}
 
@@ -868,6 +1023,35 @@ export function GitPanel({
                   </button>
                 </div>
 
+                <div className="space-y-2 rounded-lg border border-white/10 p-3">
+                  <p className="text-xs font-semibold">{t.publicRepo}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {t.publicRepoHint}
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      value={publicRepoDraft}
+                      onChange={(event) => setPublicRepoDraft(event.target.value)}
+                      placeholder={t.publicRepoPlaceholder}
+                      className="min-w-0 flex-1 rounded-md border border-white/15 bg-transparent px-2.5 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void handleOpenPublicRepo();
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      disabled={busy || !publicRepoDraft.trim()}
+                      onClick={() => void handleOpenPublicRepo()}
+                      className="glass-toolbar-action shrink-0 rounded-lg border border-white/15 px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-50"
+                    >
+                      {t.publicRepoAction}
+                    </button>
+                  </div>
+                </div>
+
                 <p className="text-xs font-semibold tracking-wide text-muted-foreground">
                   {t.repos}
                 </p>
@@ -938,8 +1122,10 @@ export function GitPanel({
         ) : (
           <>
             {!auth.signedIn ? (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">{t.notSignedIn}</p>
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
+                <p className="text-center text-sm text-muted-foreground">
+                  {t.notSignedIn}
+                </p>
                 <button
                   type="button"
                   onClick={() => {
@@ -973,31 +1159,29 @@ export function GitPanel({
                 <div className="rounded-lg border border-white/10 px-3 py-2 text-xs">
                   <p className="font-medium">
                     {formatDeckGithubLinkLabel(link)}
+                    {isReadOnly ? (
+                      <span className="ml-2 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {t.readOnlyBadge}
+                      </span>
+                    ) : null}
                   </p>
                   <p className="text-muted-foreground">
                     {t.branch}: {link.branch}
                   </p>
                 </div>
-                <label className="block space-y-1">
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    {t.commitMessage}
-                  </span>
-                  <input
-                    value={message}
-                    onChange={(event) => setMessage(event.target.value)}
-                    placeholder={t.commitPlaceholder}
-                    className="w-full rounded-md border border-white/15 bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                </label>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void handleQuickPush()}
-                  className="glass-primary inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-50"
-                >
-                  <ArrowUp className="size-3.5" aria-hidden />
-                  {busy ? t.pushing : t.quickPush}
-                </button>
+                {!isReadOnly ? (
+                  <label className="block space-y-1">
+                    <span className="text-xs font-semibold text-muted-foreground">
+                      {t.commitMessage}
+                    </span>
+                    <input
+                      value={message}
+                      onChange={(event) => setMessage(event.target.value)}
+                      placeholder={t.commitPlaceholder}
+                      className="w-full rounded-md border border-white/15 bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  </label>
+                ) : null}
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -1008,18 +1192,20 @@ export function GitPanel({
                     <ArrowDown className="size-3.5" aria-hidden />
                     {busy ? t.pulling : conflict ? t.pullMerge : t.pull}
                   </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void handlePushStaged()}
-                    className="glass-toolbar-action inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold disabled:opacity-50"
-                  >
-                    {busy
-                      ? t.pushing
-                      : scmChanges.some((c) => c.staged)
-                        ? t.pushIncluded
-                        : t.push}
-                  </button>
+                  {!isReadOnly ? (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void handlePushStaged()}
+                      className="glass-toolbar-action inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                    >
+                      {busy
+                        ? t.pushing
+                        : scmChanges.some((c) => c.staged)
+                          ? t.pushIncluded
+                          : t.push}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     disabled={busy}
@@ -1030,16 +1216,39 @@ export function GitPanel({
                     <RefreshCw className="size-3.5" aria-hidden />
                   </button>
                 </div>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void handleForcePush()}
-                  className="glass-toolbar-action w-full rounded-lg border border-amber-500/40 px-3 py-1.5 text-[11px] font-semibold text-amber-800 disabled:opacity-50 dark:text-amber-300"
-                >
-                  {t.forcePush}
-                </button>
+                {!isReadOnly ? (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void handleQuickPush()}
+                      className="glass-primary inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                    >
+                      <ArrowUp className="size-3.5" aria-hidden />
+                      {busy ? t.pushing : t.quickPush}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy || scmChanges.length === 0}
+                      onClick={() => void handleRevertAll()}
+                      className="glass-toolbar-action inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                    >
+                      <RotateCcw className="size-3.5" aria-hidden />
+                      {t.revertAll}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void handleForcePush()}
+                      className="glass-toolbar-action inline-flex flex-1 items-center justify-center rounded-lg border border-amber-500/40 px-3 py-2 text-[11px] font-semibold text-amber-800 disabled:opacity-50 dark:text-amber-300"
+                    >
+                      {t.forcePush}
+                    </button>
+                  </div>
+                ) : null}
 
-                {scmChanges.length === 0 ? (
+                {!isReadOnly ? (
+                  scmChanges.length === 0 ? (
                   <p className="text-xs text-muted-foreground">{t.noChanges}</p>
                 ) : (
                   <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -1150,7 +1359,8 @@ export function GitPanel({
                       );
                     })}
                   </div>
-                )}
+                )
+                ) : null}
               </>
             )}
           </>
@@ -1183,7 +1393,7 @@ export function GitPanel({
                 <button
                   type="button"
                   onClick={() => setCreateRepoOpen(false)}
-                  className="glass-toolbar-action inline-flex size-7 items-center justify-center rounded-md border border-white/15"
+                  className="glass-close inline-flex size-7 items-center justify-center"
                   aria-label="Close"
                 >
                   <X className="size-3.5" aria-hidden />
@@ -1268,6 +1478,44 @@ export function GitPanel({
           </div>
         </DialogPortal>
       ) : null}
+
+      <ConfirmDialog
+        open={forceConfirmOpen}
+        title={t.forcePush}
+        description={t.forceConfirm}
+        variant="danger"
+        onCancel={() => setForceConfirmOpen(false)}
+        onConfirm={() => void confirmForcePush()}
+      />
+      <ConfirmDialog
+        open={revertAllConfirmOpen}
+        title={t.revertAll}
+        description={t.revertAllConfirm}
+        variant="danger"
+        onCancel={() => setRevertAllConfirmOpen(false)}
+        onConfirm={() => void confirmRevertAll()}
+      />
+      <ConfirmDialog
+        open={revertPathConfirm !== null}
+        title={t.revertFile}
+        description={
+          revertPathConfirm
+            ? `Revert “${revertPathConfirm}”? Local changes will be lost.`
+            : undefined
+        }
+        variant="danger"
+        onCancel={() => setRevertPathConfirm(null)}
+        onConfirm={() => void confirmRevertPath()}
+      />
+      <ConfirmDialog
+        open={keepLocalPrompt !== null}
+        title={t.keepLocalTitle}
+        description={t.keepLocalConfirm}
+        confirmLabel={t.keepLocal}
+        cancelLabel={t.replaceRemote}
+        onCancel={() => void applyKeepLocalChoice(false)}
+        onConfirm={() => void applyKeepLocalChoice(true)}
+      />
     </WorkspacePanel>
   );
 }

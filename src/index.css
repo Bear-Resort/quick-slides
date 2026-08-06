@@ -886,11 +886,54 @@
   transform: translateY(-3px) scale(1.08);
 }
 
-.theme-swatch:hover .theme-swatch-face,
-.theme-swatch:focus-visible .theme-swatch-face {
+/* Full-bleed diagonal fill — clipped by rounded face, no border inset */
+.theme-swatch-face {
+  transition: box-shadow 0.18s ease, outline-color 0.18s ease;
+}
+
+.theme-swatch-split {
+  /* Hard split; clip to parent rounded rect */
+  border-radius: inherit;
+}
+
+.theme-swatch-face-idle:hover,
+.theme-swatch:focus-visible .theme-swatch-face-idle {
   box-shadow:
-    0 8px 20px hsl(0 0% 0% / 0.28),
-    inset 0 1px 0 0 hsl(0 0% 100% / 0.35);
+    0 0 0 2px hsl(var(--foreground) / 0.35),
+    0 8px 20px hsl(0 0% 0% / 0.28);
+}
+
+.theme-swatch:hover .theme-swatch-face-selected,
+.theme-swatch:focus-visible .theme-swatch-face-selected {
+  box-shadow:
+    0 0 0 1px hsl(var(--foreground) / 0.85),
+    0 0 0 3px hsl(var(--background)),
+    0 8px 20px hsl(0 0% 0% / 0.28);
+}
+
+.night .theme-swatch:hover .theme-swatch-face-selected,
+.night .theme-swatch:focus-visible .theme-swatch-face-selected {
+  box-shadow:
+    0 0 0 1px hsl(0 0% 100% / 0.9),
+    0 0 0 3px hsl(var(--card)),
+    0 8px 20px hsl(0 0% 0% / 0.45);
+}
+
+.theme-swatch-face-selected {
+  outline: 2px solid hsl(var(--foreground));
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 1px hsl(var(--foreground) / 0.85),
+    0 0 0 3px hsl(var(--background)),
+    0 2px 8px hsl(0 0% 0% / 0.22);
+}
+
+.night .theme-swatch-face-selected {
+  outline-color: hsl(0 0% 98%);
+  box-shadow:
+    0 0 0 1px hsl(0 0% 100% / 0.9),
+    0 0 0 3px hsl(var(--card)),
+    0 2px 10px hsl(0 0% 0% / 0.45);
 }
 
 /* Energy Save — near-black green surfaces, no glass/blur */
@@ -999,6 +1042,89 @@ html.energy-save .energy-save-badge {
   border-color: hsl(150 22% 32%);
 }
 
+.energy-save-tooltip {
+  position: fixed;
+  z-index: 9999;
+  width: max-content;
+  max-width: 220px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: hsl(222 35% 10%);
+  border: 1px solid hsl(215 25% 24%);
+  color: hsl(210 20% 88%);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  white-space: normal;
+  text-align: left;
+  pointer-events: none;
+  box-shadow: 0 6px 18px hsl(0 0% 0% / 0.35);
+}
+
+/* Dialog close — quiet by default, red liquid glass on hover (quick-tex).
+ * Must beat .glass-toolbar-action:hover:not(:disabled) (ghost Button variant). */
+.glass-close,
+button.glass-close,
+.glass-toolbar-action.glass-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 9999px !important;
+  border: 1px solid transparent !important;
+  color: hsl(var(--muted-foreground)) !important;
+  background: transparent !important;
+  opacity: 0.75;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.glass-close:hover,
+.glass-close:hover:not(:disabled),
+button.glass-close:hover:not(:disabled),
+.glass-toolbar-action.glass-close:hover:not(:disabled),
+.night .glass-toolbar-action.glass-close:hover:not(:disabled) {
+  opacity: 1;
+  color: hsl(0 0% 100%) !important;
+  border-color: hsl(0 90% 70% / 0.55) !important;
+  background: linear-gradient(
+    165deg,
+    hsl(0 85% 68% / 0.92) 0%,
+    hsl(0 72% 48% / 0.82) 100%
+  ) !important;
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.45),
+    inset 0 -1px 0 0 hsl(0 60% 20% / 0.2),
+    0 4px 14px hsl(0 72% 40% / 0.35) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+}
+
+.glass-close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.45) !important;
+}
+
+html.energy-save .glass-close:hover,
+html.energy-save .glass-close:hover:not(:disabled),
+html.energy-save button.glass-close:hover:not(:disabled),
+html.energy-save .glass-toolbar-action.glass-close:hover:not(:disabled) {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: hsl(var(--destructive)) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
 .night .markdown-preview .katex {
   color: hsl(var(--foreground));
 }
@@ -1105,6 +1231,12 @@ html.energy-save .energy-save-badge {
     hsl(var(--card)) 0%,
     color-mix(in srgb, hsl(var(--card)) 92%, hsl(var(--muted))) 100%
   );
+}
+
+/* Slide surface frame must match the canvas — never app chrome card/muted gray. */
+.slide-color-light .slide-frame,
+.slide-color-dark .slide-frame {
+  background: hsl(var(--slide-bg));
 }
 
 .slide-text-title {
@@ -1479,17 +1611,23 @@ html.energy-save .energy-save-badge {
 .slide-color-dark.slide-theme-regular,
 .slide-color-light .slide-theme-regular,
 .slide-color-dark .slide-theme-regular {
-  --slide-theme-title-block: hsl(var(--slide-bg));
+  --slide-theme-title-block: transparent;
 }
 
 .slide-color-light.slide-theme-regular .slide-canvas,
-.slide-color-light .slide-theme-regular .slide-canvas {
+.slide-color-light .slide-theme-regular .slide-canvas,
+.slide-color-light.slide-theme-regular .slide-frame,
+.slide-color-light .slide-theme-regular .slide-frame {
   background: #ffffff;
+  box-shadow: none;
 }
 
 .slide-color-dark.slide-theme-regular .slide-canvas,
-.slide-color-dark .slide-theme-regular .slide-canvas {
-  background: hsl(var(--slide-bg));
+.slide-color-dark .slide-theme-regular .slide-canvas,
+.slide-color-dark.slide-theme-regular .slide-frame,
+.slide-color-dark .slide-theme-regular .slide-frame {
+  background: #18181b;
+  box-shadow: none;
 }
 
 /* Map Tailwind/app color tokens to slide surface inside the canvas only */
@@ -1506,7 +1644,7 @@ html.energy-save .energy-save-badge {
 
 /* Theme tokens — structure is shared; only slide title colors differ. */
 .slide-theme-regular {
-  --slide-theme-title-block: hsl(var(--slide-bg, var(--card)));
+  --slide-theme-title-block: transparent;
 }
 
 .slide-theme-tinted {
@@ -1654,9 +1792,157 @@ html.energy-save .energy-save-badge {
   background-color: var(--slide-theme-code-bg);
 }
 
-.slide-content pre code.slide-code-bg {
+.slide-content pre code,
+.slide-code-block code {
   background-color: transparent;
   padding: 0;
+  color: inherit;
+}
+
+/*
+ * Syntax highlighting (rehype-highlight / highlight.js).
+ * Token colors adapt to slide light/dark surfaces.
+ */
+.slide-code-block,
+.slide-code-block code.hljs {
+  color: hsl(var(--slide-fg, var(--foreground)));
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: hsl(var(--slide-muted-fg, var(--muted-foreground)));
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-addition {
+  color: #0550ae;
+}
+
+.hljs-number,
+.hljs-string,
+.hljs-meta .hljs-meta-string,
+.hljs-literal,
+.hljs-doctag,
+.hljs-regexp {
+  color: #0a3069;
+}
+
+.hljs-title,
+.hljs-section,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class {
+  color: #953800;
+}
+
+.hljs-attribute,
+.hljs-attr,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-class .hljs-title,
+.hljs-type {
+  color: #116329;
+}
+
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link,
+.hljs-meta,
+.hljs-selector-attr,
+.hljs-selector-pseudo,
+.hljs-built_in,
+.hljs-builtin-name {
+  color: #8250df;
+}
+
+.hljs-deletion {
+  color: #cf222e;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 700;
+}
+
+.slide-color-dark .hljs-keyword,
+.slide-color-dark .hljs-selector-tag,
+.slide-color-dark .hljs-addition,
+.night .hljs-keyword,
+.night .hljs-selector-tag,
+.night .hljs-addition {
+  color: #79c0ff;
+}
+
+.slide-color-dark .hljs-number,
+.slide-color-dark .hljs-string,
+.slide-color-dark .hljs-meta .hljs-meta-string,
+.slide-color-dark .hljs-literal,
+.slide-color-dark .hljs-doctag,
+.slide-color-dark .hljs-regexp,
+.night .hljs-number,
+.night .hljs-string,
+.night .hljs-meta .hljs-meta-string,
+.night .hljs-literal,
+.night .hljs-doctag,
+.night .hljs-regexp {
+  color: #a5d6ff;
+}
+
+.slide-color-dark .hljs-title,
+.slide-color-dark .hljs-section,
+.slide-color-dark .hljs-name,
+.slide-color-dark .hljs-selector-id,
+.slide-color-dark .hljs-selector-class,
+.night .hljs-title,
+.night .hljs-section,
+.night .hljs-name,
+.night .hljs-selector-id,
+.night .hljs-selector-class {
+  color: #ffa657;
+}
+
+.slide-color-dark .hljs-attribute,
+.slide-color-dark .hljs-attr,
+.slide-color-dark .hljs-variable,
+.slide-color-dark .hljs-template-variable,
+.slide-color-dark .hljs-class .hljs-title,
+.slide-color-dark .hljs-type,
+.night .hljs-attribute,
+.night .hljs-attr,
+.night .hljs-variable,
+.night .hljs-template-variable,
+.night .hljs-class .hljs-title,
+.night .hljs-type {
+  color: #7ee787;
+}
+
+.slide-color-dark .hljs-symbol,
+.slide-color-dark .hljs-bullet,
+.slide-color-dark .hljs-link,
+.slide-color-dark .hljs-meta,
+.slide-color-dark .hljs-selector-attr,
+.slide-color-dark .hljs-selector-pseudo,
+.slide-color-dark .hljs-built_in,
+.slide-color-dark .hljs-builtin-name,
+.night .hljs-symbol,
+.night .hljs-bullet,
+.night .hljs-link,
+.night .hljs-meta,
+.night .hljs-selector-attr,
+.night .hljs-selector-pseudo,
+.night .hljs-built_in,
+.night .hljs-builtin-name {
+  color: #d2a8ff;
+}
+
+.slide-color-dark .hljs-deletion,
+.night .hljs-deletion {
+  color: #ffa198;
 }
 
 .slide-theme-tinted .slide-canvas {
@@ -1845,7 +2131,7 @@ html.energy-save .energy-save-badge {
 }
 
 .slide-theme-regular .slide-content-heading {
-  background: var(--slide-theme-title-block);
+  background: transparent;
 }
 
 .slide-theme-regular .slide-primary-heading,
@@ -1855,7 +2141,7 @@ html.energy-save .energy-save-badge {
 }
 
 .slide-theme-regular .slide-primary-heading {
-  background: var(--slide-theme-title-block);
+  background: transparent;
 }
 
 .slide-theme-tinted :is(.slide-primary-heading, .slide-content-heading) {
@@ -1943,3 +2229,125 @@ html.energy-save .energy-save-badge {
   cursor: grabbing;
   background: var(--scrollbar-thumb-hover);
 }
+
+/* Present mode — match exported HTML viewer chrome */
+.presenter-nav:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.55);
+}
+
+.presenter-laser {
+  background: #ef4444;
+  box-shadow:
+    0 0 0 3px rgba(239, 68, 68, 0.35),
+    0 0 18px 6px rgba(239, 68, 68, 0.75);
+}
+
+/* Liquid-glass erase radius preview — matches canvas eraser stroke width */
+.presenter-eraser-cursor {
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background:
+    radial-gradient(
+      circle at 32% 28%,
+      rgba(255, 255, 255, 0.55) 0%,
+      rgba(255, 255, 255, 0.16) 42%,
+      rgba(255, 255, 255, 0.08) 70%,
+      rgba(255, 255, 255, 0.04) 100%
+    );
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.65),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 4px 14px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(10px) saturate(1.35);
+  -webkit-backdrop-filter: blur(10px) saturate(1.35);
+}
+
+/* Smaller liquid-glass tip for pens — tinted with --pen-ink */
+.presenter-pen-cursor {
+  border: 1.5px solid color-mix(in srgb, var(--pen-ink) 70%, white 30%);
+  background:
+    radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--pen-ink) 88%, white 12%) 0%,
+      color-mix(in srgb, var(--pen-ink) 55%, transparent) 48%,
+      rgba(255, 255, 255, 0.14) 100%
+    );
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.55),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.16),
+    0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 2px 8px color-mix(in srgb, var(--pen-ink) 35%, transparent);
+  backdrop-filter: blur(8px) saturate(1.3);
+  -webkit-backdrop-filter: blur(8px) saturate(1.3);
+}
+
+.presenter-glass-light.presenter-eraser-cursor {
+  border-color: rgba(255, 255, 255, 0.78);
+  background:
+    radial-gradient(
+      circle at 32% 28%,
+      rgba(255, 255, 255, 0.82) 0%,
+      rgba(255, 255, 255, 0.42) 42%,
+      rgba(255, 255, 255, 0.22) 70%,
+      rgba(255, 255, 255, 0.12) 100%
+    );
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.9),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.35),
+    0 4px 14px rgba(0, 0, 0, 0.14);
+}
+
+.presenter-glass-light.presenter-pen-cursor {
+  border-color: color-mix(in srgb, var(--pen-ink) 55%, white 45%);
+  background:
+    radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--pen-ink) 92%, white 8%) 0%,
+      color-mix(in srgb, var(--pen-ink) 45%, rgba(255, 255, 255, 0.55)) 52%,
+      rgba(255, 255, 255, 0.4) 100%
+    );
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.85),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgba(255, 255, 255, 0.4),
+    0 2px 8px color-mix(in srgb, var(--pen-ink) 28%, transparent);
+}
+
+/* Frosted chip behind pen/pointer icons */
+.presenter-pen-chip {
+  display: inline-flex;
+  width: 1.5rem;
+  height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Light slides: brighter chip so black / saturated pens stay readable */
+.presenter-toolbox-light .presenter-pen-chip {
+  border-color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.presenter-pen-chip-white {
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.presenter-pen-chip-white svg {
+  filter: drop-shadow(0 0 1.25px rgba(0, 0, 0, 0.85));
+}
+

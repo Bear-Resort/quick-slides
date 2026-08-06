@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  PresenterAnnotator,
+  type PresenterAnnotateTool,
+} from "@/components/PresenterAnnotator";
 import { PresenterBar } from "@/components/PresenterBar";
 import { ScaledSlideFrame } from "@/components/ScaledSlideFrame";
 import { SlideView } from "@/components/SlideView";
@@ -19,6 +23,10 @@ type SlidePresenterProps = {
   onExit: () => void;
 };
 
+/**
+ * In-app present mode — same layout as the exported HTML presentation:
+ * black stage, full slide centered and scaled to fit (including narrow screens).
+ */
 export function SlidePresenter({
   markdown,
   theme,
@@ -27,6 +35,8 @@ export function SlidePresenter({
 }: SlidePresenterProps) {
   const slides = splitSlides(markdown);
   const [index, setIndex] = useState(0);
+  const [tool, setTool] = useState<PresenterAnnotateTool>("none");
+  const [clearNonce, setClearNonce] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const goNext = useCallback(() => {
@@ -93,11 +103,19 @@ export function SlidePresenter({
         event.preventDefault();
         goPrev();
       }
+      if (event.key === "Home") {
+        event.preventDefault();
+        setIndex(0);
+      }
+      if (event.key === "End") {
+        event.preventDefault();
+        setIndex(Math.max(slides.length - 1, 0));
+      }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [goNext, goPrev, handleExit]);
+  }, [goNext, goPrev, handleExit, slides.length]);
 
   useEffect(() => {
     setIndex((current) => Math.min(current, Math.max(slides.length - 1, 0)));
@@ -110,29 +128,42 @@ export function SlidePresenter({
   return (
     <div
       ref={containerRef}
-      className="slide-presenter ambient-bg fixed inset-0 z-50 flex flex-col"
+      className="slide-presenter fixed inset-0 z-50 bg-black text-white"
     >
       <div
         className={cn(
-          "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-6 py-6 sm:px-10",
+          "presenter-stage absolute inset-0 box-border flex flex-col overflow-hidden px-4 pb-[4.5rem] pt-[3.25rem] sm:px-[4.5rem] sm:py-14",
           slideColorModeClass(colorMode),
           themeAttributes.className,
         )}
         style={themeAttributes.style}
       >
-        <ScaledSlideFrame
-          className="mx-auto h-full min-h-0 max-w-[min(100%,calc((100dvh-12rem)*16/9))]"
-          theme={theme}
-          slideIndex={index}
-          layout={layout}
-        >
-          <SlideView markdown={slide} />
-        </ScaledSlideFrame>
+        <div className="relative min-h-0 w-full flex-1">
+          <ScaledSlideFrame
+            className="h-full w-full min-h-0 min-w-0"
+            theme={theme}
+            slideIndex={index}
+            layout={layout}
+            maxScale={1}
+          >
+            <SlideView markdown={slide} />
+          </ScaledSlideFrame>
+          <PresenterAnnotator
+            slideIndex={index}
+            tool={tool}
+            colorMode={colorMode}
+            clearNonce={clearNonce}
+          />
+        </div>
       </div>
 
       <PresenterBar
         index={index}
         total={slides.length}
+        tool={tool}
+        colorMode={colorMode}
+        onToolChange={setTool}
+        onClearPage={() => setClearNonce((n) => n + 1)}
         onPrevious={goPrev}
         onNext={goNext}
         onExit={handleExit}

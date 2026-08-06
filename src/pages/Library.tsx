@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FolderOpen, Plus, Trash2 } from "lucide-react";
 import { Header } from "@/components/Header";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { NamePromptDialog } from "@/components/NamePromptDialog";
 import {
   connectLibraryRoot,
@@ -100,6 +101,7 @@ export function Library() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [namePromptOpen, setNamePromptOpen] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const loadDecks = useCallback(async () => {
     setLoading(true);
@@ -172,7 +174,13 @@ export function Library() {
   };
 
   const handleDelete = async (folderName: string) => {
-    if (!window.confirm(t.deleteConfirm)) return;
+    setDeleteConfirmId(folderName);
+  };
+
+  const confirmDelete = async () => {
+    const folderName = deleteConfirmId;
+    if (!folderName) return;
+    setDeleteConfirmId(null);
     const root = await getLibraryRoot();
     if (!root) return;
     setBusy(true);
@@ -301,6 +309,15 @@ export function Library() {
         initialValue={getDefaultPresentationFilename(language)}
         onCancel={() => setNamePromptOpen(false)}
         onConfirm={(name) => void handleNew(name)}
+      />
+      <ConfirmDialog
+        open={deleteConfirmId !== null}
+        title={t.delete}
+        description={t.deleteConfirm}
+        variant="danger"
+        confirmLabel={t.delete}
+        onCancel={() => setDeleteConfirmId(null)}
+        onConfirm={() => void confirmDelete()}
       />
     </div>
   );

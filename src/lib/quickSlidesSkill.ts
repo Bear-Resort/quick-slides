@@ -159,7 +159,7 @@ Put \`$$...$$\` on its own lines for display math.
 ## Supported markdown
 
 - Headings \`#\` through \`###\` (see layout rules above)
-- **Bold**, *italic*, lists, blockquotes, tables, fenced code blocks
+- **Bold**, *italic*, lists, blockquotes, tables, fenced code blocks (\`\`\`lang for syntax highlighting)
 - GFM tables and strikethrough
 
 ## Full deck template

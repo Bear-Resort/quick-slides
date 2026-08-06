@@ -42,21 +42,19 @@ type StyleSelectorProps = {
 
 function ThemeSwatch({
   selected,
-  swatch,
-  iconSwatch,
+  lightColor,
+  darkColor,
   iconUrl,
   label,
   onClick,
 }: {
   selected: boolean;
-  swatch: string;
-  iconSwatch?: string;
+  lightColor: string;
+  darkColor: string;
   iconUrl?: string;
   label: string;
   onClick: () => void;
 }) {
-  const swatchBackground = iconUrl && iconSwatch ? iconSwatch : swatch;
-
   return (
     <button
       type="button"
@@ -71,19 +69,25 @@ function ThemeSwatch({
     >
       <span
         className={cn(
-          "theme-swatch-face absolute inset-0 overflow-hidden rounded-md border-2 transition-[box-shadow,border-color]",
+          "theme-swatch-face absolute inset-0 overflow-hidden rounded-md",
           selected
-            ? "border-foreground shadow-[0_0_0_1px_hsl(var(--background))]"
-            : "border-transparent group-hover/swatch:border-foreground/35",
+            ? "theme-swatch-face-selected"
+            : "theme-swatch-face-idle",
         )}
-        style={{ backgroundColor: swatchBackground }}
       >
+        <span
+          aria-hidden
+          className="theme-swatch-split absolute inset-0"
+          style={{
+            backgroundImage: `linear-gradient(to bottom right, ${lightColor} 50%, ${darkColor} 50%)`,
+          }}
+        />
         {iconUrl ? (
           <img
             src={iconUrl}
             alt=""
             aria-hidden
-            className="absolute inset-0 size-full object-contain p-0.5"
+            className="absolute inset-0 size-full object-contain p-0.5 drop-shadow-sm"
           />
         ) : null}
       </span>
@@ -186,8 +190,8 @@ function ThemeDialog({
                   <ThemeSwatch
                     key={theme.id}
                     selected={value === theme.id}
-                    swatch={theme.swatch}
-                    iconSwatch={theme.iconSwatch}
+                    lightColor={theme.swatch}
+                    darkColor={theme.swatchDark}
                     iconUrl={theme.iconUrl}
                     label={theme.name[language]}
                     onClick={() => onChange(theme.id)}

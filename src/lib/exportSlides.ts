@@ -72,7 +72,7 @@ function collectEmbeddedStyles(): string {
   return chunks.join("\n");
 }
 
-/** Minimal standalone HTML viewer chrome (black stage + corner nav). */
+/** Standalone HTML viewer chrome — matches in-app present mode (no exit). */
 const EXPORT_VIEWER_STYLES = `
 html, body {
   margin: 0;
@@ -96,22 +96,31 @@ html, body {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  padding: 3rem 4.5rem;
   box-sizing: border-box;
+  /* Tight padding on narrow screens so the full 16:9 slide can fit. */
+  padding: 2.75rem 0.5rem 4rem;
+}
+@media (min-width: 640px) {
+  .export-viewer-stage {
+    padding: 3.5rem 4.5rem;
+  }
 }
 .export-slide {
   display: none;
-  align-items: center;
-  justify-content: center;
+  position: relative;
   width: 100%;
   height: 100%;
   min-height: 0;
   min-width: 0;
 }
 .export-slide.is-active {
-  display: flex;
+  display: block;
 }
 .export-slide-page {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  /* Sized in JS; centered via translate + uniform scale so narrow viewports don't clip. */
   transform-origin: center center;
   -webkit-transform-origin: center center;
 }
@@ -120,7 +129,7 @@ html, body {
   top: 1rem;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 2;
+  z-index: 20;
   font-size: 0.95rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -132,7 +141,7 @@ html, body {
 .export-viewer-nav {
   position: absolute;
   bottom: 1.25rem;
-  z-index: 2;
+  z-index: 20;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -158,10 +167,213 @@ html, body {
   height: 1.25rem;
 }
 .export-viewer-nav-prev {
-  left: 1.25rem;
+  left: 1rem;
 }
 .export-viewer-nav-next {
-  right: 1.25rem;
+  right: 1rem;
+}
+@media (min-width: 640px) {
+  .export-viewer-nav-prev {
+    left: 1.25rem;
+  }
+  .export-viewer-nav-next {
+    right: 1.25rem;
+  }
+}
+.export-annotate {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  touch-action: none;
+}
+.export-annotate.is-idle {
+  pointer-events: none;
+}
+.export-annotate.is-laser,
+.export-annotate.is-draw {
+  cursor: none;
+}
+.export-annotate canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.export-annotate-cursor {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+}
+.export-annotate-cursor.is-laser {
+  width: 1rem;
+  height: 1rem;
+  background: #ef4444;
+  box-shadow:
+    0 0 0 3px rgba(239, 68, 68, 0.35),
+    0 0 18px 6px rgba(239, 68, 68, 0.75);
+}
+.export-annotate-cursor.is-eraser {
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background:
+    radial-gradient(
+      circle at 32% 28%,
+      rgba(255, 255, 255, 0.55) 0%,
+      rgba(255, 255, 255, 0.16) 42%,
+      rgba(255, 255, 255, 0.08) 70%,
+      rgba(255, 255, 255, 0.04) 100%
+    );
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.65),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 4px 14px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(10px) saturate(1.35);
+  -webkit-backdrop-filter: blur(10px) saturate(1.35);
+}
+.export-annotate-cursor.is-pen {
+  border: 1.5px solid color-mix(in srgb, var(--pen-ink) 70%, white 30%);
+  background:
+    radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--pen-ink) 88%, white 12%) 0%,
+      color-mix(in srgb, var(--pen-ink) 55%, transparent) 48%,
+      rgba(255, 255, 255, 0.14) 100%
+    );
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.55),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.16),
+    0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 2px 8px color-mix(in srgb, var(--pen-ink) 35%, transparent);
+  backdrop-filter: blur(8px) saturate(1.3);
+  -webkit-backdrop-filter: blur(8px) saturate(1.3);
+}
+.slide-color-light .export-annotate-cursor.is-eraser {
+  border-color: rgba(255, 255, 255, 0.78);
+  background:
+    radial-gradient(
+      circle at 32% 28%,
+      rgba(255, 255, 255, 0.82) 0%,
+      rgba(255, 255, 255, 0.42) 42%,
+      rgba(255, 255, 255, 0.22) 70%,
+      rgba(255, 255, 255, 0.12) 100%
+    );
+}
+.slide-color-light .export-annotate-cursor.is-pen {
+  border-color: color-mix(in srgb, var(--pen-ink) 55%, white 45%);
+  background:
+    radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--pen-ink) 92%, white 8%) 0%,
+      color-mix(in srgb, var(--pen-ink) 45%, rgba(255, 255, 255, 0.55)) 52%,
+      rgba(255, 255, 255, 0.4) 100%
+    );
+}
+.export-toolbox-toggle {
+  position: absolute;
+  bottom: 1.25rem;
+  left: 50%;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  transform: translateX(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  cursor: pointer;
+}
+.export-toolbox-toggle:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.55);
+}
+.export-toolbox-toggle svg {
+  width: 1rem;
+  height: 1rem;
+}
+.export-toolbox {
+  position: absolute;
+  bottom: 1.25rem;
+  left: 50%;
+  z-index: 20;
+  display: none;
+  align-items: center;
+  gap: 0.25rem;
+  transform: translateX(-50%);
+  padding: 0.375rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.export-toolbox.is-open {
+  display: flex;
+}
+.export-toolbox-toggle.is-hidden {
+  display: none;
+}
+.export-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+.export-tool:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.export-tool.is-active {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7);
+}
+.export-tool svg {
+  width: 1rem;
+  height: 1rem;
+}
+.export-pen-chip {
+  display: inline-flex;
+  width: 1.5rem;
+  height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.slide-color-light .export-pen-chip {
+  border-color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+.export-pen-chip-white {
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+.export-pen-chip-white svg {
+  filter: drop-shadow(0 0 1.25px rgba(0, 0, 0, 0.85));
+}
+.export-tool-hide {
+  margin-left: 0.125rem;
 }
 `;
 
@@ -169,8 +381,23 @@ const ICON_CHEVRON_LEFT =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>';
 const ICON_CHEVRON_RIGHT =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
+const ICON_CHEVRON_DOWN =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+const ICON_PEN =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/></svg>';
+const ICON_POINTER =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a1 1 0 0 0-.662.662l-1.884 6.124a.5.5 0 0 1-.947.063z"/></svg>';
+const ICON_ERASER =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>';
+const ICON_TRASH =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>';
 
-function buildExportViewerScript(): string {
+function buildExportViewerScript(colorMode: SlideColorMode): string {
+  const isDark = colorMode === "dark";
+  const penBlue = isDark ? "#93c5fd" : "#2563eb";
+  const penRed = isDark ? "#fca5a5" : "#dc2626";
+  const penBlack = isDark ? "#ffffff" : "#171717";
+
   return `
 (function () {
   var slides = Array.prototype.slice.call(document.querySelectorAll(".export-slide"));
@@ -178,8 +405,33 @@ function buildExportViewerScript(): string {
   var counter = document.getElementById("counter");
   var prevBtn = document.getElementById("prev");
   var nextBtn = document.getElementById("next");
+  var stage = document.getElementById("stage");
+  var annotate = document.getElementById("annotate");
+  var canvas = document.getElementById("annotate-canvas");
+  var cursorEl = document.getElementById("annotate-cursor");
+  var toolbox = document.getElementById("toolbox");
+  var toolboxToggle = document.getElementById("toolbox-toggle");
+  var tool = "none";
+  var toolboxOpen = false;
+  var strokesBySlide = {};
+  var drawing = null;
+  var ctx = canvas ? canvas.getContext("2d") : null;
+  var PEN_WIDTH = 3.5;
+  var PEN_CURSOR = 14;
+  var ERASER_WIDTH = 28;
+  var PEN_COLORS = {
+    "pen-blue": "${penBlue}",
+    "pen-red": "${penRed}",
+    "pen-black": "${penBlack}"
+  };
 
-  function viewportSize() {
+  function stageSize() {
+    if (stage) {
+      var rect = stage.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        return { width: rect.width, height: rect.height };
+      }
+    }
     var vv = window.visualViewport;
     return {
       width: (vv && vv.width) || window.innerWidth,
@@ -192,15 +444,158 @@ function buildExportViewerScript(): string {
     if (!active) return;
     var page = active.querySelector(".export-slide-page");
     if (!page) return;
-    var size = viewportSize();
+    // Fit inside the slide slot (stage content box after padding).
+    var width = active.clientWidth;
+    var height = active.clientHeight;
+    if (width <= 0 || height <= 0) {
+      var size = stageSize();
+      // Fall back to stage content box (exclude padding).
+      var style = stage ? window.getComputedStyle(stage) : null;
+      var padX = style
+        ? (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0)
+        : 0;
+      var padY = style
+        ? (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0)
+        : 0;
+      width = Math.max(1, size.width - padX);
+      height = Math.max(1, size.height - padY);
+    }
     var scale = Math.min(
-      (size.width - 120) / ${SLIDE_WIDTH},
-      (size.height - 120) / ${SLIDE_HEIGHT},
+      width / ${SLIDE_WIDTH},
+      height / ${SLIDE_HEIGHT},
       1
     );
-    var transform = "scale(" + scale + ")";
+    // Absolute + translate keeps layout size from forcing overflow/clipping.
+    page.style.position = "absolute";
+    page.style.left = "50%";
+    page.style.top = "50%";
+    page.style.width = "${SLIDE_WIDTH}px";
+    page.style.height = "${SLIDE_HEIGHT}px";
+    page.style.maxWidth = "none";
+    page.style.maxHeight = "none";
+    page.style.transformOrigin = "center center";
+    page.style.webkitTransformOrigin = "center center";
+    var transform = "translate(-50%, -50%) scale(" + scale + ")";
     page.style.transform = transform;
     page.style.webkitTransform = transform;
+  }
+
+  function syncCanvas() {
+    if (!annotate || !canvas || !ctx) return;
+    var rect = annotate.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    var width = Math.max(1, Math.round(rect.width));
+    var height = Math.max(1, Math.round(rect.height));
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.width = width + "px";
+    canvas.style.height = height + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    redraw();
+  }
+
+  function drawStroke(stroke) {
+    if (!ctx || !stroke.points.length) return;
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = stroke.width;
+    if (stroke.kind === "eraser") {
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.strokeStyle = "rgba(0,0,0,1)";
+    } else {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = stroke.color;
+    }
+    ctx.beginPath();
+    ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+    for (var i = 1; i < stroke.points.length; i++) {
+      ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+    }
+    if (stroke.points.length === 1) {
+      ctx.lineTo(stroke.points[0].x + 0.01, stroke.points[0].y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function redraw() {
+    if (!ctx || !canvas) return;
+    var width = canvas.clientWidth;
+    var height = canvas.clientHeight;
+    ctx.clearRect(0, 0, width, height);
+    var list = strokesBySlide[index] || [];
+    for (var i = 0; i < list.length; i++) drawStroke(list[i]);
+    if (drawing) drawStroke(drawing);
+  }
+
+  function pointFromEvent(e) {
+    if (!annotate) return { x: 0, y: 0 };
+    var rect = annotate.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  function setCursor(point) {
+    if (!cursorEl) return;
+    if (!point || tool === "none") {
+      cursorEl.hidden = true;
+      return;
+    }
+    cursorEl.hidden = false;
+    cursorEl.style.left = point.x + "px";
+    cursorEl.style.top = point.y + "px";
+    cursorEl.className = "export-annotate-cursor";
+    if (tool === "pointer") {
+      cursorEl.classList.add("is-laser");
+    } else if (tool === "eraser") {
+      cursorEl.classList.add("is-eraser");
+      cursorEl.style.width = ERASER_WIDTH + "px";
+      cursorEl.style.height = ERASER_WIDTH + "px";
+      cursorEl.style.removeProperty("--pen-ink");
+    } else if (PEN_COLORS[tool]) {
+      cursorEl.classList.add("is-pen");
+      cursorEl.style.width = PEN_CURSOR + "px";
+      cursorEl.style.height = PEN_CURSOR + "px";
+      cursorEl.style.setProperty("--pen-ink", PEN_COLORS[tool]);
+    }
+  }
+
+  function updateAnnotateMode() {
+    if (!annotate) return;
+    annotate.classList.remove("is-idle", "is-laser", "is-draw");
+    if (tool === "none") annotate.classList.add("is-idle");
+    else if (tool === "pointer") annotate.classList.add("is-laser");
+    else annotate.classList.add("is-draw");
+  }
+
+  function setTool(next) {
+    tool = next;
+    drawing = null;
+    updateAnnotateMode();
+    Array.prototype.forEach.call(document.querySelectorAll(".export-tool[data-tool]"), function (btn) {
+      btn.classList.toggle("is-active", btn.getAttribute("data-tool") === tool);
+    });
+    if (tool === "none") setCursor(null);
+  }
+
+  function openToolbox() {
+    toolboxOpen = true;
+    if (toolbox) toolbox.classList.add("is-open");
+    if (toolboxToggle) toolboxToggle.classList.add("is-hidden");
+    if (tool === "none") setTool("pointer");
+  }
+
+  function closeToolbox() {
+    toolboxOpen = false;
+    if (toolbox) toolbox.classList.remove("is-open");
+    if (toolboxToggle) toolboxToggle.classList.remove("is-hidden");
+    setTool("none");
+  }
+
+  function clearPage() {
+    strokesBySlide[index] = [];
+    drawing = null;
+    redraw();
   }
 
   function render() {
@@ -213,6 +608,9 @@ function buildExportViewerScript(): string {
     if (prevBtn) prevBtn.disabled = index <= 0;
     if (nextBtn) nextBtn.disabled = index >= slides.length - 1;
     fitActiveSlide();
+    syncCanvas();
+    drawing = null;
+    setCursor(null);
   }
 
   function next() {
@@ -227,6 +625,47 @@ function buildExportViewerScript(): string {
       index -= 1;
       render();
     }
+  }
+
+  if (annotate) {
+    annotate.addEventListener("pointerdown", function (e) {
+      if (tool === "none" || tool === "pointer") return;
+      if (e.button !== 0) return;
+      annotate.setPointerCapture(e.pointerId);
+      var point = pointFromEvent(e);
+      setCursor(point);
+      if (tool === "eraser") {
+        drawing = { kind: "eraser", color: "transparent", width: ERASER_WIDTH, points: [point] };
+      } else {
+        drawing = { kind: "pen", color: PEN_COLORS[tool], width: PEN_WIDTH, points: [point] };
+      }
+      redraw();
+    });
+    annotate.addEventListener("pointermove", function (e) {
+      if (tool === "none") return;
+      var point = pointFromEvent(e);
+      if (tool === "pointer" || tool === "eraser" || PEN_COLORS[tool]) setCursor(point);
+      if (tool === "pointer" || !drawing) return;
+      var last = drawing.points[drawing.points.length - 1];
+      if (last && Math.hypot(point.x - last.x, point.y - last.y) < 1.25) return;
+      drawing.points.push(point);
+      redraw();
+    });
+    function endStroke(e) {
+      if (annotate.hasPointerCapture && annotate.hasPointerCapture(e.pointerId)) {
+        annotate.releasePointerCapture(e.pointerId);
+      }
+      if (!drawing) return;
+      if (!strokesBySlide[index]) strokesBySlide[index] = [];
+      strokesBySlide[index].push(drawing);
+      drawing = null;
+      redraw();
+    }
+    annotate.addEventListener("pointerup", endStroke);
+    annotate.addEventListener("pointercancel", endStroke);
+    annotate.addEventListener("pointerleave", function () {
+      if (tool === "pointer" || tool === "eraser" || PEN_COLORS[tool]) setCursor(null);
+    });
   }
 
   document.addEventListener("keydown", function (e) {
@@ -249,11 +688,29 @@ function buildExportViewerScript(): string {
 
   if (prevBtn) prevBtn.addEventListener("click", prev);
   if (nextBtn) nextBtn.addEventListener("click", next);
-  window.addEventListener("resize", fitActiveSlide);
+  if (toolboxToggle) toolboxToggle.addEventListener("click", openToolbox);
+  Array.prototype.forEach.call(document.querySelectorAll(".export-tool[data-tool]"), function (btn) {
+    btn.addEventListener("click", function () {
+      setTool(btn.getAttribute("data-tool"));
+    });
+  });
+  var clearBtn = document.getElementById("clear-page");
+  if (clearBtn) clearBtn.addEventListener("click", clearPage);
+  var hideBtn = document.getElementById("toolbox-hide");
+  if (hideBtn) hideBtn.addEventListener("click", closeToolbox);
+
+  window.addEventListener("resize", function () {
+    fitActiveSlide();
+    syncCanvas();
+  });
   if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", fitActiveSlide);
+    window.visualViewport.addEventListener("resize", function () {
+      fitActiveSlide();
+      syncCanvas();
+    });
   }
 
+  updateAnnotateMode();
   render();
 })();
 `;
@@ -437,6 +894,29 @@ html, body {
 .export-pdf-page:last-child {
   page-break-after: auto;
   break-after: auto;
+}
+/* Regular theme: pure white/black like the live preview — no app-chrome gray fills. */
+body.slide-theme-regular,
+.slide-theme-regular.export-pdf-page,
+.slide-theme-regular .slide-frame,
+.slide-theme-regular .slide-canvas {
+  background: #ffffff !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+body.slide-color-dark.slide-theme-regular,
+.slide-color-dark.slide-theme-regular.export-pdf-page,
+.slide-color-dark.slide-theme-regular .slide-frame,
+.slide-color-dark.slide-theme-regular .slide-canvas,
+body.slide-color-dark.slide-theme-regular .slide-frame,
+body.slide-color-dark.slide-theme-regular .slide-canvas {
+  background: #18181b !important;
+  background-image: none !important;
+}
+.slide-theme-regular .slide-content-heading,
+.slide-theme-regular .slide-primary-heading {
+  background: transparent !important;
+  background-image: none !important;
 }
 /* Page chrome */
 .slide-frame,
@@ -916,7 +1396,13 @@ function buildHtmlDocument(
   const slideThemeClass = getSlideThemeAttributes(slideThemeId).className;
   const colorModeClass = slideColorModeClass(colorMode);
   const total = slideFragments.length;
-  const viewerScript = buildExportViewerScript();
+  const viewerScript = buildExportViewerScript(colorMode);
+  const penBlue = colorMode === "dark" ? "#93c5fd" : "#2563eb";
+  const penRed = colorMode === "dark" ? "#fca5a5" : "#dc2626";
+  const penBlack = colorMode === "dark" ? "#ffffff" : "#171717";
+  const penBlackChipClass =
+    colorMode === "dark" ? " export-pen-chip-white" : "";
+  const penBlackLabel = colorMode === "dark" ? "White pen" : "Black pen";
 
   return `<!DOCTYPE html>
 <html lang="${language}" class="${nightClass.trim()}">
@@ -937,10 +1423,40 @@ ${EXPORT_VIEWER_STYLES}
     <div id="counter" class="export-viewer-counter" aria-live="polite">1/${total}</div>
     <div id="stage" class="export-viewer-stage">
 ${slidesHtml}
+      <div id="annotate" class="export-annotate is-idle">
+        <canvas id="annotate-canvas"></canvas>
+        <div id="annotate-cursor" class="export-annotate-cursor" hidden></div>
+      </div>
     </div>
     <button type="button" id="prev" class="export-viewer-nav export-viewer-nav-prev" aria-label="Previous" disabled>
       ${ICON_CHEVRON_LEFT}
     </button>
+    <button type="button" id="toolbox-toggle" class="export-toolbox-toggle" aria-label="Show annotation tools" title="Show annotation tools">
+      ${ICON_PEN}
+    </button>
+    <div id="toolbox" class="export-toolbox" role="toolbar" aria-label="Annotation tools">
+      <button type="button" class="export-tool" data-tool="pointer" aria-label="Red pointer" title="Red pointer">
+        <span class="export-pen-chip" style="color:#ef4444">${ICON_POINTER}</span>
+      </button>
+      <button type="button" class="export-tool" data-tool="pen-blue" aria-label="Blue pen" title="Blue pen">
+        <span class="export-pen-chip" style="color:${penBlue}">${ICON_PEN}</span>
+      </button>
+      <button type="button" class="export-tool" data-tool="pen-red" aria-label="Red pen" title="Red pen">
+        <span class="export-pen-chip" style="color:${penRed}">${ICON_PEN}</span>
+      </button>
+      <button type="button" class="export-tool" data-tool="pen-black" aria-label="${penBlackLabel}" title="${penBlackLabel}">
+        <span class="export-pen-chip${penBlackChipClass}" style="color:${penBlack}">${ICON_PEN}</span>
+      </button>
+      <button type="button" class="export-tool" data-tool="eraser" aria-label="Eraser" title="Eraser">
+        ${ICON_ERASER}
+      </button>
+      <button type="button" id="clear-page" class="export-tool" aria-label="Clear drawings on this slide" title="Clear drawings on this slide">
+        ${ICON_TRASH}
+      </button>
+      <button type="button" id="toolbox-hide" class="export-tool export-tool-hide" aria-label="Hide annotation tools" title="Hide annotation tools">
+        ${ICON_CHEVRON_DOWN}
+      </button>
+    </div>
     <button type="button" id="next" class="export-viewer-nav export-viewer-nav-next" aria-label="Next"${total <= 1 ? " disabled" : ""}>
       ${ICON_CHEVRON_RIGHT}
     </button>

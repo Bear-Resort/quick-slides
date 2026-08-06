@@ -1,11 +1,17 @@
-import { useEffect, useState } from "react";
-import { Bot, Check, Copy, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { BookOpen, Bot, Check, Copy, X } from "lucide-react";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import {
+  setPanelIconTrigger,
+  useTitleIconFlight,
+} from "@/components/FlyingTitleIcon";
 import { HtmlScrollbarArea } from "@/components/HtmlScrollbar";
 import { HelpExamplePair } from "@/components/HelpExamplePair";
 import { DialogPortal } from "@/components/ui/dialog-portal";
 import { Button } from "@/components/ui/button";
 import { QUICK_SLIDES_AI_INSTRUCTIONS } from "@/lib/quickSlidesSkill";
 import { useLanguage } from "@/lib/useLanguage";
+import { cn } from "@/lib/utils";
 
 const GETTING_STARTED_MARKDOWN = {
   en: `<!-- # starts a title slide — large centered heading -->
@@ -67,12 +73,12 @@ $$
 
 ---
 
-<!-- Inline code with backticks, or a fenced block with triple backticks -->
+<!-- Inline code with backticks, or a fenced block: \`\`\`lang for highlighting -->
 ### Code
 
 Inline \`const x = 1\`
 
-\`\`\`
+\`\`\`javascript
 function greet() {
   return "Hello";
 }
@@ -135,12 +141,12 @@ $$
 
 ---
 
-<!-- 行内 \`反引号\`，或三反引号围栏代码块 -->
+<!-- 行内 \`反引号\`，或围栏代码块：\`\`\`lang 启用语法高亮 -->
 ### 代码
 
 行内 \`const x = 1\`
 
-\`\`\`
+\`\`\`javascript
 function greet() {
   return "Hello";
 }
@@ -292,6 +298,11 @@ export function HelpDialog({
 }: HelpDialogProps) {
   const language = useLanguage();
   const t = copy[language];
+  const [confirmSample, setConfirmSample] = useState(false);
+  const { panelShown, titleIcon, flightOverlay } = useTitleIconFlight({
+    open,
+    Icon: BookOpen,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -307,7 +318,8 @@ export function HelpDialog({
   if (!open) return null;
 
   const handleLoadSample = () => {
-    if (hasEditorContent && !window.confirm(t.replaceSampleConfirm)) {
+    if (hasEditorContent) {
+      setConfirmSample(true);
       return;
     }
     onLoadSample();
@@ -317,26 +329,36 @@ export function HelpDialog({
   return (
     <DialogPortal>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-[3px]"
+        className={cn(
+          "fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-[3px] transition-opacity duration-[480ms] ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+          panelShown ? "opacity-100" : "opacity-0",
+        )}
         onClick={onClose}
       >
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby="quick-slides-help-title"
-          className="glass-panel glass-panel-dialog flex h-[min(90vh,820px)] max-h-[min(90vh,820px)] min-h-0 w-full max-w-4xl flex-col overflow-hidden rounded-xl border shadow-lg"
+          className={cn(
+            "glass-panel glass-panel-dialog flex h-[min(90vh,820px)] max-h-[min(90vh,820px)] min-h-0 w-full max-w-4xl flex-col overflow-hidden rounded-xl border shadow-lg transition-opacity duration-[480ms] ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+            panelShown ? "opacity-100" : "opacity-0",
+          )}
           onClick={(event) => event.stopPropagation()}
         >
           <div className="glass-divider relative z-[1] flex shrink-0 items-center justify-between border-b px-5 py-4">
-            <h2 id="quick-slides-help-title" className="text-lg font-bold">
-              {t.title}
-            </h2>
+            <div className="flex min-w-0 items-center gap-2.5">
+              {titleIcon}
+              <h2 id="quick-slides-help-title" className="text-lg font-bold">
+                {t.title}
+              </h2>
+            </div>
             <Button
               variant="ghost"
               size="icon"
               onClick={onClose}
               aria-label={t.close}
               title={t.close}
+              className="glass-close size-7 shrink-0"
             >
               <X />
             </Button>
@@ -435,6 +457,18 @@ export function HelpDialog({
           </div>
         </div>
       </div>
+      {flightOverlay}
+      <ConfirmDialog
+        open={confirmSample}
+        title={t.replaceSampleConfirm}
+        variant="danger"
+        onCancel={() => setConfirmSample(false)}
+        onConfirm={() => {
+          setConfirmSample(false);
+          onLoadSample();
+          onClose();
+        }}
+      />
     </DialogPortal>
   );
 }
@@ -448,6 +482,10 @@ function AiInstructionsDialog({ open, onClose }: AiInstructionsDialogProps) {
   const language = useLanguage();
   const t = aiCopy[language];
   const [copied, setCopied] = useState(false);
+  const { panelShown, titleIcon, flightOverlay } = useTitleIconFlight({
+    open,
+    Icon: Bot,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -477,19 +515,25 @@ function AiInstructionsDialog({ open, onClose }: AiInstructionsDialogProps) {
   return (
     <DialogPortal>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-[3px]"
+        className={cn(
+          "fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-[3px] transition-opacity duration-[480ms] ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+          panelShown ? "opacity-100" : "opacity-0",
+        )}
         onClick={onClose}
       >
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby="quick-slides-ai-title"
-          className="glass-panel glass-panel-dialog flex h-[min(90vh,720px)] max-h-[min(90vh,720px)] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-xl border shadow-lg"
+          className={cn(
+            "glass-panel glass-panel-dialog flex h-[min(90vh,720px)] max-h-[min(90vh,720px)] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-xl border shadow-lg transition-opacity duration-[480ms] ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+            panelShown ? "opacity-100" : "opacity-0",
+          )}
           onClick={(event) => event.stopPropagation()}
         >
           <div className="glass-divider relative z-[1] flex shrink-0 items-center justify-between gap-3 border-b px-5 py-4">
-            <div className="flex min-w-0 items-center gap-2">
-              <Bot className="size-5 shrink-0 text-foreground" aria-hidden />
+            <div className="flex min-w-0 items-center gap-2.5">
+              {titleIcon}
               <h2 id="quick-slides-ai-title" className="truncate text-lg font-bold">
                 {t.title}
               </h2>
@@ -500,6 +544,7 @@ function AiInstructionsDialog({ open, onClose }: AiInstructionsDialogProps) {
               onClick={onClose}
               aria-label={t.close}
               title={t.close}
+              className="glass-close size-7 shrink-0"
             >
               <X />
             </Button>
@@ -530,6 +575,7 @@ function AiInstructionsDialog({ open, onClose }: AiInstructionsDialogProps) {
           </div>
         </div>
       </div>
+      {flightOverlay}
     </DialogPortal>
   );
 }
@@ -543,6 +589,7 @@ export function HelpButton({ onLoadSample, hasEditorContent }: HelpButtonProps) 
   const language = useLanguage();
   const t = copy[language];
   const [open, setOpen] = useState(false);
+  const iconRef = useRef<SVGSVGElement>(null);
 
   return (
     <>
@@ -551,10 +598,13 @@ export function HelpButton({ onLoadSample, hasEditorContent }: HelpButtonProps) 
         size="icon"
         aria-label={t.help}
         title={t.help}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setPanelIconTrigger(iconRef.current);
+          setOpen(true);
+        }}
         className="slide-locate-btn glass-toolbar-action"
       >
-        <span className="text-base font-bold leading-none">?</span>
+        <BookOpen ref={iconRef} className="size-4" aria-hidden />
       </Button>
       <HelpDialog
         open={open}
@@ -570,6 +620,7 @@ export function AiInstructionsButton() {
   const language = useLanguage();
   const t = aiCopy[language];
   const [open, setOpen] = useState(false);
+  const iconRef = useRef<SVGSVGElement>(null);
 
   return (
     <>
@@ -578,10 +629,13 @@ export function AiInstructionsButton() {
         size="icon"
         aria-label={t.label}
         title={t.label}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setPanelIconTrigger(iconRef.current);
+          setOpen(true);
+        }}
         className="slide-locate-btn glass-toolbar-action"
       >
-        <Bot className="size-4" aria-hidden />
+        <Bot ref={iconRef} className="size-4" aria-hidden />
       </Button>
       <AiInstructionsDialog open={open} onClose={() => setOpen(false)} />
     </>

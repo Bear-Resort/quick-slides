@@ -32,6 +32,8 @@ export type DeckGithubLink = {
    * (used by the shared `quick-slide` library). Empty = repo root.
    */
   pathPrefix?: string;
+  /** Public repo opened for viewing — disables push / local edits. */
+  readOnly?: boolean;
 };
 
 type LinkMap = Record<string, DeckGithubLink>;
@@ -83,7 +85,7 @@ export function isSharedLibraryRepo(repo: Pick<GithubRepo, "name"> | DeckGithubL
 
 export function linkFromRepo(
   repo: GithubRepo,
-  options?: { branch?: string; pathPrefix?: string },
+  options?: { branch?: string; pathPrefix?: string; readOnly?: boolean },
 ): DeckGithubLink {
   const pathPrefix = options?.pathPrefix?.trim() || undefined;
   return {
@@ -92,6 +94,7 @@ export function linkFromRepo(
     branch: options?.branch ?? repo.defaultBranch,
     fullName: repo.fullName,
     ...(pathPrefix ? { pathPrefix } : {}),
+    ...(options?.readOnly ? { readOnly: true } : {}),
   };
 }
 
@@ -194,6 +197,9 @@ export async function pushDeckToGithub(options: {
 }): Promise<{ commitMessages: string[] }> {
   const link = getDeckGithubLink(options.deckId);
   if (!link) throw new Error("This presentation is not linked to a GitHub repository");
+  if (link.readOnly) {
+    throw new Error("This presentation is opened read-only from a public repository");
+  }
 
   const {
     isTextPath,

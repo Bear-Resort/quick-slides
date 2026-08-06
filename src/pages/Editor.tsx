@@ -15,6 +15,8 @@ import { SlideDeck, type SlideDeckHandle } from "@/components/SlideDeck";
 import { SlidePresenter } from "@/components/SlidePresenter";
 import { StyleSelector } from "@/components/StyleSelector";
 import { ImagePreviewDialog } from "@/components/ImagePreviewDialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { NamePromptDialog } from "@/components/NamePromptDialog";
 import { DialogPortal } from "@/components/ui/dialog-portal";
 import { DeckProvider } from "@/context/DeckContext";
 import { getSlideNavigation } from "@/lib/slideMarkers";
@@ -170,10 +172,21 @@ export function Editor() {
   const [jsonUnlockOpen, setJsonUnlockOpen] = useState(false);
   const [imagePreviewPath, setImagePreviewPath] = useState<string | null>(null);
   const [quickPushBusy, setQuickPushBusy] = useState(false);
-  const isLinked = Boolean(deckId && getDeckGithubLink(deckId));
+  const [namePrompt, setNamePrompt] = useState<
+    | { kind: "file"; parentPath: string }
+    | { kind: "folder"; parentPath: string }
+    | { kind: "rename"; path: string }
+    | null
+  >(null);
+  const [deleteConfirmPath, setDeleteConfirmPath] = useState<string | null>(null);
+  const [revertConfirmPath, setRevertConfirmPath] = useState<string | null>(null);
+  const githubLink = deckId ? getDeckGithubLink(deckId) : null;
+  const isLinked = Boolean(githubLink);
+  const isRepoReadOnly = Boolean(githubLink?.readOnly);
   const editingMarkdown = isMarkdownPath(activeFilePath);
   const isJsonFile = activeFilePath.toLowerCase().endsWith(".json");
   const jsonReadOnly = isJsonFile && !jsonUnlocked;
+  const editorReadOnly = isRepoReadOnly || jsonReadOnly;
   const entryFile = metadata?.entryFile ?? DECK_MARKDOWN_FILE;
 
   const editorRef = useRef<MarkdownEditorHandle>(null);
@@ -424,6 +437,7 @@ export function Editor() {
   auxFileTextRef.current = auxFileText;
 
   const flushSave = useCallback(async () => {
+    if (isRepoReadOnly) return;
     const handle = deckHandleRef.current;
     const folderName = folderNameRef.current;
     const meta = metadataRef.current;
@@ -496,7 +510,7 @@ export function Editor() {
     } catch {
       setSaveStatus("error");
     }
-  }, [withCurrentFileStyle, applyStyleFromMetadata, jsonUnlocked]);
+  }, [withCurrentFileStyle, applyStyleFromMetadata, jsonUnlocked, isRepoReadOnly]);
 
   const openRepoFile = useCallback(
     async (path: string) => {
@@ -551,117 +565,131 @@ export function Editor() {
     [deckHandle, flushSave, applyStyleFromMetadata],
   );
 
-  const handleNewFile = useCallback(
-    async (parentPath = "") => {
-      if (!deckHandle) return;
-      const name = window.prompt("New file name", "notes.md");
-      if (!name?.trim()) return;
-      const path = parentPath ? `${parentPath}/${name.trim()}` : name.trim();
-      await createRepoFile(deckHandle, path, "");
-      setScmEpoch((n) => n + 1);
-      await openRepoFile(path);
-    },
-    [deckHandle, openRepoFile],
-  );
+  const handleNewFile = useCallback(async (parentPath = "") => {
+    if (!deckHandle || isRepoReadOnly) return;
+    setNamePrompt({ kind: "file", parentPath });
+  }, [deckHandle, isRepoReadOnly]);
 
-  const handleNewFolder = useCallback(
-    async (parentPath = "") => {
-      if (!deckHandle) return;
-      const name = window.prompt("New folder name", "assets");
-      if (!name?.trim()) return;
-      const path = parentPath ? `${parentPath}/${name.trim()}` : name.trim();
-      await createRepoFolder(deckHandle, path);
-      setScmEpoch((n) => n + 1);
-    },
-    [deckHandle],
-  );
+  const handleNewFolder = useCallback(async (parentPath = "") => {
+    if (!deckHandle || isRepoReadOnly) return;
+    setNamePrompt({ kind: "folder", parentPath });
+  }, [deckHandle, isRepoReadOnly]);
 
   const handleRenameFile = useCallback(
     async (path: string) => {
-      if (!deckHandle) return;
-      const next = window.prompt("Rename to", path);
-      if (!next?.trim() || next.trim() === path) return;
-      await renameRepoPath(deckHandle, path, next.trim());
-      if (activeFilePath === path) setActiveFilePath(next.trim());
+      if (!deckHandle || isRepoReadOnly) return;
+      setNamePrompt({ kind: "rename", path });
+    },
+    [deckHandle, isRepoReadOnly],
+  );
+
+  const applyNamePrompt = useCallback(
+    async (name: string) => {
+      if (!deckHandle || !namePrompt) return;
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      setNamePrompt(null);
+
+      if (namePrompt.kind === "file") {
+        const path = namePrompt.parentPath
+          ? `${namePrompt.parentPath}/${trimmed}`
+          : trimmed;
+        await createRepoFile(deckHandle, path, "");
+        setScmEpoch((n) => n + 1);
+        await openRepoFile(path);
+        return;
+      }
+
+      if (namePrompt.kind === "folder") {
+        const path = namePrompt.parentPath
+          ? `${namePrompt.parentPath}/${trimmed}`
+          : trimmed;
+        await createRepoFolder(deckHandle, path);
+        setScmEpoch((n) => n + 1);
+        return;
+      }
+
+      const path = namePrompt.path;
+      if (trimmed === path) return;
+      await renameRepoPath(deckHandle, path, trimmed);
+      if (activeFilePath === path) setActiveFilePath(trimmed);
       const meta = metadataRef.current;
       if (meta) {
-        const nextPath = next.trim();
         const fileStyles = { ...(meta.fileStyles ?? {}) };
         if (isMarkdownPath(path) && fileStyles[path]) {
-          fileStyles[nextPath] = fileStyles[path]!;
+          fileStyles[trimmed] = fileStyles[path]!;
           delete fileStyles[path];
         }
         const nextMeta: DeckMetadata = {
           ...meta,
           fileStyles,
-          entryFile: meta.entryFile === path ? nextPath : meta.entryFile,
+          entryFile: meta.entryFile === path ? trimmed : meta.entryFile,
         };
         setMetadata(nextMeta);
         metadataRef.current = nextMeta;
       }
       setScmEpoch((n) => n + 1);
     },
-    [deckHandle, activeFilePath],
+    [deckHandle, namePrompt, openRepoFile, activeFilePath],
   );
 
   const handleDeleteFile = useCallback(
     async (path: string) => {
-      if (!deckHandle) return;
-      const label = path;
-      if (
-        !window.confirm(
-          `Delete “${label}”? This cannot be undone locally. Missing references may break the deck.`,
-        )
-      ) {
-        return;
-      }
-      try {
-        await removeRepoPath(deckHandle, path);
-      } catch (err) {
-        window.alert(err instanceof Error ? err.message : String(err));
-        return;
-      }
-      if (deckId) unstagePath(deckId, path);
+      if (!deckHandle || isRepoReadOnly) return;
+      setDeleteConfirmPath(path);
+    },
+    [deckHandle, isRepoReadOnly],
+  );
 
-      const meta = metadataRef.current;
-      if (meta) {
-        const fileStyles = { ...(meta.fileStyles ?? {}) };
-        let changed = false;
-        for (const key of Object.keys(fileStyles)) {
-          if (key === path || key.startsWith(`${path}/`)) {
-            delete fileStyles[key];
-            changed = true;
-          }
-        }
-        let nextEntry = meta.entryFile;
-        if (meta.entryFile === path || meta.entryFile.startsWith(`${path}/`)) {
-          nextEntry = DECK_MARKDOWN_FILE;
+  const confirmDeleteFile = useCallback(async () => {
+    const path = deleteConfirmPath;
+    if (!deckHandle || !path) return;
+    setDeleteConfirmPath(null);
+    try {
+      await removeRepoPath(deckHandle, path);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    if (deckId) unstagePath(deckId, path);
+
+    const meta = metadataRef.current;
+    if (meta) {
+      const fileStyles = { ...(meta.fileStyles ?? {}) };
+      let changed = false;
+      for (const key of Object.keys(fileStyles)) {
+        if (key === path || key.startsWith(`${path}/`)) {
+          delete fileStyles[key];
           changed = true;
         }
-        if (changed) {
-          const nextMeta: DeckMetadata = {
-            ...meta,
-            fileStyles,
-            entryFile: nextEntry,
-          };
-          setMetadata(nextMeta);
-          metadataRef.current = nextMeta;
-        }
       }
+      let nextEntry = meta.entryFile;
+      if (meta.entryFile === path || meta.entryFile.startsWith(`${path}/`)) {
+        nextEntry = DECK_MARKDOWN_FILE;
+        changed = true;
+      }
+      if (changed) {
+        const nextMeta: DeckMetadata = {
+          ...meta,
+          fileStyles,
+          entryFile: nextEntry,
+        };
+        setMetadata(nextMeta);
+        metadataRef.current = nextMeta;
+      }
+    }
 
-      if (activeFilePath === path || activeFilePath.startsWith(`${path}/`)) {
-        const fallback =
-          metadataRef.current?.entryFile || DECK_MARKDOWN_FILE;
-        setActiveFilePath(fallback);
-        const text = (await readRepoTextFile(deckHandle, fallback)) ?? "";
-        skipNextAutosaveRef.current = true;
-        setMarkdown(text);
-        setAuxFileText("");
-      }
-      setScmEpoch((n) => n + 1);
-    },
-    [deckHandle, deckId, activeFilePath],
-  );
+    if (activeFilePath === path || activeFilePath.startsWith(`${path}/`)) {
+      const fallback =
+        metadataRef.current?.entryFile || DECK_MARKDOWN_FILE;
+      setActiveFilePath(fallback);
+      const text = (await readRepoTextFile(deckHandle, fallback)) ?? "";
+      skipNextAutosaveRef.current = true;
+      setMarkdown(text);
+      setAuxFileText("");
+    }
+    setScmEpoch((n) => n + 1);
+  }, [deckHandle, deleteConfirmPath, deckId, activeFilePath]);
 
   const handleQuickPush = useCallback(async () => {
     if (!deckId || !deckHandle || !getDeckGithubLink(deckId)) return;
@@ -700,22 +728,35 @@ export function Editor() {
 
   const handleRevertFile = useCallback(
     async (path: string) => {
-      if (!deckId || !deckHandle) return;
-      if (!window.confirm(`Revert “${path}”?`)) return;
-      await revertFileFromRemote({ deckId, deckHandle, path });
-      unstagePath(deckId, path);
-      if (isMarkdownPath(path) && (path === entryFile || path === activeFilePath)) {
-        const text = (await readRepoTextFile(deckHandle, path)) ?? "";
-        skipNextAutosaveRef.current = true;
-        setMarkdown(text);
-        if (path === activeFilePath) setAuxFileText("");
-      } else if (path === activeFilePath) {
-        await openRepoFile(path);
-      }
-      setScmEpoch((n) => n + 1);
+      if (!deckId || !deckHandle || isRepoReadOnly) return;
+      setRevertConfirmPath(path);
     },
-    [deckId, deckHandle, activeFilePath, entryFile, openRepoFile],
+    [deckId, deckHandle, isRepoReadOnly],
   );
+
+  const confirmRevertFile = useCallback(async () => {
+    const path = revertConfirmPath;
+    if (!deckId || !deckHandle || !path) return;
+    setRevertConfirmPath(null);
+    await revertFileFromRemote({ deckId, deckHandle, path });
+    unstagePath(deckId, path);
+    if (isMarkdownPath(path) && (path === entryFile || path === activeFilePath)) {
+      const text = (await readRepoTextFile(deckHandle, path)) ?? "";
+      skipNextAutosaveRef.current = true;
+      setMarkdown(text);
+      if (path === activeFilePath) setAuxFileText("");
+    } else if (path === activeFilePath) {
+      await openRepoFile(path);
+    }
+    setScmEpoch((n) => n + 1);
+  }, [
+    deckId,
+    deckHandle,
+    revertConfirmPath,
+    activeFilePath,
+    entryFile,
+    openRepoFile,
+  ]);
 
   useEffect(() => {
     if (!isLibraryDeck) return;
@@ -1032,8 +1073,13 @@ export function Editor() {
               ),
             onQuickPush: () => void handleQuickPush(),
             quickPushBusy,
-            canQuickPush: isLinked && Boolean(deckHandle) && hasScmChanges,
-            quickPushClean: isLinked && Boolean(deckHandle) && !hasScmChanges,
+            canQuickPush:
+              isLinked &&
+              !isRepoReadOnly &&
+              Boolean(deckHandle) &&
+              hasScmChanges,
+            quickPushClean:
+              isLinked && !isRepoReadOnly && Boolean(deckHandle) && !hasScmChanges,
             onUndo: () => editorRef.current?.undo(),
             onRedo: () => editorRef.current?.redo(),
             canUndo: editorHistory.canUndo,
@@ -1081,6 +1127,8 @@ export function Editor() {
           onDeckLinked={(linkedDeckId) => {
             setWorkspacePanel(null);
             setScmEpoch((n) => n + 1);
+            writeWorkspaceMode("git");
+            setWorkspaceMode("git");
             if (linkedDeckId !== deckId) {
               navigate(`/edit/${linkedDeckId}`);
             }
@@ -1133,9 +1181,9 @@ export function Editor() {
                 onLocateSlide={handleLocateSlide}
                 onHistoryChange={setEditorHistory}
                 placeholder={t.placeholder}
-                showLineNumbers={isLinked}
+                showLineNumbers
                 scmLineChanges={isLinked ? scmLineChanges : []}
-                readOnly={jsonReadOnly}
+                readOnly={editorReadOnly}
               />
             </div>
           </section>
@@ -1246,6 +1294,53 @@ export function Editor() {
             </div>
           </DialogPortal>
         ) : null}
+
+        <NamePromptDialog
+          open={namePrompt !== null}
+          title={
+            namePrompt?.kind === "folder"
+              ? "New folder"
+              : namePrompt?.kind === "rename"
+                ? "Rename"
+                : "New file"
+          }
+          initialValue={
+            namePrompt?.kind === "rename"
+              ? namePrompt.path
+              : namePrompt?.kind === "folder"
+                ? "assets"
+                : "notes.md"
+          }
+          confirmLabel={namePrompt?.kind === "rename" ? "Rename" : "Create"}
+          onCancel={() => setNamePrompt(null)}
+          onConfirm={(name) => void applyNamePrompt(name)}
+        />
+        <ConfirmDialog
+          open={deleteConfirmPath !== null}
+          title="Delete file?"
+          description={
+            deleteConfirmPath
+              ? `Delete “${deleteConfirmPath}”? This cannot be undone locally. Missing references may break the deck.`
+              : undefined
+          }
+          variant="danger"
+          confirmLabel="Delete"
+          onCancel={() => setDeleteConfirmPath(null)}
+          onConfirm={() => void confirmDeleteFile()}
+        />
+        <ConfirmDialog
+          open={revertConfirmPath !== null}
+          title="Revert file?"
+          description={
+            revertConfirmPath
+              ? `Revert “${revertConfirmPath}”? Local changes will be lost.`
+              : undefined
+          }
+          variant="danger"
+          confirmLabel="Revert"
+          onCancel={() => setRevertConfirmPath(null)}
+          onConfirm={() => void confirmRevertFile()}
+        />
       </div>
     </DeckProvider>
   );

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react
 import { useNavigate } from "react-router-dom";
 import {
   FilePlus2,
+  Files,
   FolderOpen,
   FolderPlus,
   Github,
@@ -9,10 +10,12 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { NamePromptDialog } from "@/components/NamePromptDialog";
 import type { WorkspaceMode } from "@/components/Header";
 import { RepoFileTree } from "@/components/RepoFileTree";
 import { WorkspacePanel } from "@/components/WorkspacePanel";
+import { useToast } from "@/components/ui/toaster";
 import type { LibraryIndexEntry } from "@/lib/library/deckFormat";
 import {
   connectLibraryRoot,
@@ -80,6 +83,7 @@ const copy = {
     renameFailed: "Could not rename presentation.",
     noFolderChosen: "No folder chosen.",
     noFolderChosenHint: "Choose a local folder to browse presentations on disk.",
+    toastError: "Error",
   },
   zh: {
     title: "文件",
@@ -115,6 +119,7 @@ const copy = {
     renameFailed: "无法重命名演示文稿。",
     noFolderChosen: "尚未选择文件夹。",
     noFolderChosenHint: "请选择本机文件夹以浏览磁盘上的演示文稿。",
+    toastError: "错误",
   },
 } as const;
 
@@ -170,20 +175,28 @@ export function FilesPanel({
 }: FilesPanelProps) {
   const language = useLanguage();
   const t = copy[language];
+  const { toast } = useToast();
   const navigate = useNavigate();
   const [entries, setEntries] = useState<LibraryIndexEntry[]>([]);
   const [gitEntries, setGitEntries] = useState<
     Array<{ deckId: string; title: string; fullName: string }>
   >([]);
   const [displayPath, setDisplayPath] = useState(DEFAULT_LIBRARY_DISPLAY_PATH);
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const showError = useCallback(
+    (description: string) => {
+      toast({ type: "error", title: t.toastError, description });
+    },
+    [toast, t.toastError],
+  );
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const [namePrompt, setNamePrompt] = useState<
     | { kind: "create" }
     | { kind: "rename"; id: string; title: string }
     | null
   >(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [folderEpoch, setFolderEpoch] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const signedIn = getAuthStatus().signedIn;
@@ -198,7 +211,6 @@ export function FilesPanel({
   const modeIndex = Math.max(0, modes.findIndex((item) => item.id === mode));
 
   const refresh = useCallback(async () => {
-    setError(null);
     try {
       if (mode === "disk" && getLibraryPreference() !== "custom") {
         setEntries([]);
@@ -222,7 +234,7 @@ export function FilesPanel({
       }));
       setGitEntries(links);
     } catch {
-      setError(t.loadFailed);
+      showError(t.loadFailed);
       setEntries([]);
       setGitEntries([]);
     }
@@ -263,11 +275,10 @@ export function FilesPanel({
   const handleCreate = async (name: string) => {
     setNamePrompt(null);
     if (mode === "disk" && getLibraryPreference() !== "custom") {
-      setError(t.noFolderChosen);
+      showError(t.noFolderChosen);
       return;
     }
     setBusy(true);
-    setError(null);
     try {
       let root: FileSystemDirectoryHandle | null = null;
       if (mode === "browser") {
@@ -286,7 +297,7 @@ export function FilesPanel({
         }
       }
       if (!root) {
-        setError(t.loadFailed);
+        showError(t.loadFailed);
         return;
       }
       const deck = await createDeck(root, name.trim(), language);
@@ -294,7 +305,7 @@ export function FilesPanel({
       navigate(`/edit/${deck.folderName}`);
     } catch (err) {
       console.error("createDeck failed", err);
-      setError(
+      showError(
         err instanceof Error && err.message
           ? `${t.createFailed} ${err.message}`
           : t.createFailed,
@@ -307,20 +318,19 @@ export function FilesPanel({
   const handlePickFolder = async () => {
     if (!isDiskFolderPickerSupported()) return;
     setBusy(true);
-    setError(null);
     try {
       const handle = await pickCustomLibraryRoot();
       if (!handle) return;
       const ok = await connectLibraryRoot(handle, "custom");
       if (!ok) {
-        setError(t.loadFailed);
+        showError(t.loadFailed);
         return;
       }
       setFolderEpoch((n) => n + 1);
       await refresh();
       onModeChange("disk");
     } catch {
-      setError(t.loadFailed);
+      showError(t.loadFailed);
     } finally {
       setBusy(false);
     }
@@ -329,16 +339,15 @@ export function FilesPanel({
   const handleRenameDeck = async (deckId: string, nextTitle: string) => {
     setNamePrompt(null);
     setBusy(true);
-    setError(null);
     try {
       const root = await getLibraryRoot();
       if (!root) {
-        setError(t.renameFailed);
+        showError(t.renameFailed);
         return;
       }
       const loaded = await loadDeck(root, deckId);
       if (!loaded) {
-        setError(t.renameFailed);
+        showError(t.renameFailed);
         return;
       }
       await updateDeckTitle(
@@ -350,20 +359,25 @@ export function FilesPanel({
       await refresh();
       onDeckRenamed?.(deckId, nextTitle.trim());
     } catch {
-      setError(t.renameFailed);
+      showError(t.renameFailed);
     } finally {
       setBusy(false);
     }
   };
 
   const handleDeleteDeck = async (deckId: string) => {
-    if (!window.confirm(t.deleteConfirm)) return;
+    setDeleteConfirmId(deckId);
+  };
+
+  const confirmDeleteDeck = async () => {
+    const deckId = deleteConfirmId;
+    if (!deckId) return;
+    setDeleteConfirmId(null);
     setBusy(true);
-    setError(null);
     try {
       const root = await getLibraryRoot();
       if (!root) {
-        setError(t.deleteFailed);
+        showError(t.deleteFailed);
         return;
       }
       await deleteDeck(root, deckId);
@@ -375,7 +389,7 @@ export function FilesPanel({
         navigate("/", { replace: true });
       }
     } catch {
-      setError(t.deleteFailed);
+      showError(t.deleteFailed);
     } finally {
       setBusy(false);
     }
@@ -433,6 +447,7 @@ export function FilesPanel({
       title={t.title}
       onClose={onClose}
       size={showProjectTree ? "tall" : "default"}
+      titleIcon={Files}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3">
         <div
@@ -517,12 +532,6 @@ export function FilesPanel({
         ) : null}
 
         <p className="shrink-0 text-[11px] text-muted-foreground">{hint}</p>
-
-        {error ? (
-          <p className="shrink-0 text-xs font-medium text-red-600 dark:text-red-400">
-            {error}
-          </p>
-        ) : null}
 
         {showProjectTree ? (
           <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-white/10">
@@ -698,6 +707,15 @@ export function FilesPanel({
           }
           void handleCreate(name);
         }}
+      />
+      <ConfirmDialog
+        open={deleteConfirmId !== null}
+        title={t.delete}
+        description={t.deleteConfirm}
+        variant="danger"
+        confirmLabel={t.delete}
+        onCancel={() => setDeleteConfirmId(null)}
+        onConfirm={() => void confirmDeleteDeck()}
       />
     </WorkspacePanel>
   );

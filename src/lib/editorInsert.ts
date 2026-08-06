@@ -159,7 +159,10 @@ export const INSERT_TEMPLATES: Record<InsertTemplateKey, InsertTemplate> = {
     select: { start: 3, length: EQUATION_PLACEHOLDER.length },
   },
   codeInline: { text: "`code`", select: { start: 1, length: 4 } },
-  codeBlock: { text: "```\ncode\n```", select: { start: 4, length: 4 } },
+  codeBlock: {
+    text: "```lang\ncode\n```",
+    select: { start: 3, length: 4 },
+  },
   comment: {
     text: COMMENT_MARKDOWN,
     select: { start: 5, length: COMMENT_PLACEHOLDER.length },

@@ -1,5 +1,9 @@
-import { useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { Leaf, Monitor, Moon, Settings, Sun, X } from "lucide-react";
+import {
+  setPanelIconTrigger,
+  useTitleIconFlight,
+} from "@/components/FlyingTitleIcon";
 import { Button } from "@/components/ui/button";
 import { DialogPortal } from "@/components/ui/dialog-portal";
 import {
@@ -184,6 +188,10 @@ function SettingsDialog({
   const [fontFamily, setFontFamily] = useState<EditorFontFamily>(() =>
     getEditorFontFamily(),
   );
+  const { panelShown, titleIcon, flightOverlay } = useTitleIconFlight({
+    open,
+    Icon: Settings,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -240,32 +248,45 @@ function SettingsDialog({
   ];
 
   return (
-    <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/35 p-4 backdrop-blur-[3px]"
-      onClick={onClose}
-    >
+    <>
       <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="quick-slides-settings-title"
-        className="glass-panel glass-panel-dialog flex h-[min(520px,90vh)] w-full max-w-[420px] flex-col overflow-hidden rounded-xl border shadow-lg"
-        onClick={(event) => event.stopPropagation()}
+        className={cn(
+          "fixed inset-0 z-[200] flex items-center justify-center bg-black/35 p-4 backdrop-blur-[3px] transition-opacity duration-[480ms] ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+          panelShown ? "opacity-100" : "opacity-0",
+        )}
+        onClick={onClose}
       >
-        <div className="glass-divider relative z-[1] flex shrink-0 items-center justify-between border-b px-5 py-3.5">
-          <h2 id="quick-slides-settings-title" className="text-base font-semibold">
-            {t.settings}
-          </h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            onClick={onClose}
-            aria-label={language === "zh" ? "关闭" : "Close"}
-            title={language === "zh" ? "关闭" : "Close"}
-          >
-            <X className="size-4" />
-          </Button>
-        </div>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="quick-slides-settings-title"
+          className={cn(
+            "glass-panel glass-panel-dialog flex h-[min(520px,90vh)] w-full max-w-[420px] flex-col overflow-hidden rounded-xl border shadow-lg transition-opacity duration-[480ms] ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+            panelShown ? "opacity-100" : "opacity-0",
+          )}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="glass-divider relative z-[1] flex shrink-0 items-center justify-between border-b px-5 py-3.5">
+            <div className="flex min-w-0 items-center gap-2.5">
+              {titleIcon}
+              <h2
+                id="quick-slides-settings-title"
+                className="text-base font-semibold"
+              >
+                {t.settings}
+              </h2>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="glass-close size-7 shrink-0"
+              onClick={onClose}
+              aria-label={language === "zh" ? "关闭" : "Close"}
+              title={language === "zh" ? "关闭" : "Close"}
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
 
         <div className="relative z-[1] flex min-h-0 flex-1 flex-col overflow-hidden px-5 pb-5 pt-3">
           <div
@@ -507,7 +528,9 @@ function SettingsDialog({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+      {flightOverlay}
+    </>
   );
 }
 
@@ -517,6 +540,7 @@ export function Menu({
 }: MenuProps) {
   const language = useLanguage();
   const [open, setOpen] = useState(false);
+  const iconRef = useRef<SVGSVGElement>(null);
 
   const dialog = (
     <SettingsDialog
@@ -534,9 +558,12 @@ export function Menu({
         aria-label={presenterUiCopy[language].settings}
         title={presenterUiCopy[language].settings}
         className="slide-locate-btn glass-toolbar-action"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setPanelIconTrigger(iconRef.current);
+          setOpen(true);
+        }}
       >
-        <Settings />
+        <Settings ref={iconRef} className="size-4" aria-hidden />
       </Button>
       {portalled ? <DialogPortal>{dialog}</DialogPortal> : dialog}
     </>

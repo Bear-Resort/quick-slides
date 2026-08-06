@@ -18,6 +18,8 @@ type ScaledSlideFrameProps = {
   theme?: SlideThemeId;
   slideIndex?: number;
   layout?: SlideLayoutType;
+  /** Cap uniform scale (export/present use 1 so slides never upscale). */
+  maxScale?: number;
 };
 
 type CanvasPlacement = {
@@ -47,6 +49,7 @@ export function ScaledSlideFrame({
   theme = "regular",
   slideIndex = 0,
   layout = "content",
+  maxScale,
 }: ScaledSlideFrameProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sourceRef = useRef<HTMLDivElement>(null);
@@ -69,7 +72,11 @@ export function ScaledSlideFrame({
       const height = container.clientHeight;
       if (width === 0 || height === 0) return;
 
-      const scale = Math.min(width / SLIDE_WIDTH, height / SLIDE_HEIGHT);
+      const scale = Math.min(
+        width / SLIDE_WIDTH,
+        height / SLIDE_HEIGHT,
+        maxScale ?? Number.POSITIVE_INFINITY,
+      );
       const scaledWidth = SLIDE_WIDTH * scale;
       const scaledHeight = SLIDE_HEIGHT * scale;
 
@@ -84,7 +91,7 @@ export function ScaledSlideFrame({
     const observer = new ResizeObserver(update);
     observer.observe(container);
     return () => observer.disconnect();
-  }, []);
+  }, [maxScale]);
 
   /**
    * Safari paints KaTeX HTML wrong under zoom/transform even when layout

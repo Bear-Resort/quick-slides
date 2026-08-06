@@ -20,9 +20,14 @@ export type PresetSlideThemeId = Exclude<SlideThemeId, "regular">;
 export type SlideTheme = {
   id: SlideThemeId;
   name: { en: string; zh: string };
+  /** Preview chip color for light slide mode. */
   swatch: string;
-  /** Lighter swatch fill when an icon is shown on top. */
+  /** Preview chip color for dark slide mode. */
+  swatchDark: string;
+  /** Lighter swatch fill when an icon is shown on top (light mode). */
   iconSwatch?: string;
+  /** Icon-chip fill for dark slide mode. */
+  iconSwatchDark?: string;
   iconUrl?: string;
 };
 
@@ -45,45 +50,55 @@ export const SLIDE_THEMES: SlideTheme[] = [
   {
     id: "regular",
     name: { en: "Regular", zh: "默认" },
-    swatch: "#d4d4d8",
+    swatch: "#e4e4e7",
+    swatchDark: "#27272a",
   },
   {
     id: "gray",
     name: { en: "Gray", zh: "灰色" },
     swatch: "#9ca3af",
+    swatchDark: "#3f3f46",
   },
   {
     id: "blue",
     name: { en: "Blue", zh: "蓝色" },
     swatch: "#3b82f6",
+    swatchDark: "#1e3a8a",
   },
   {
     id: "red",
     name: { en: "Red", zh: "红色" },
     swatch: "#ef4444",
+    swatchDark: "#7f1d1d",
   },
   {
     id: "green",
     name: { en: "Green", zh: "绿色" },
     swatch: "#22c55e",
+    swatchDark: "#14532d",
   },
   {
     id: "purple",
     name: { en: "Purple", zh: "紫色" },
     swatch: "#a855f7",
+    swatchDark: "#581c87",
   },
   {
     id: "bear-academy",
     name: { en: "Bear Academy", zh: "小熊學園" },
     swatch: "#eab308",
+    swatchDark: "#713f12",
     iconSwatch: "#fefce8",
+    iconSwatchDark: "#292524",
     iconUrl: bearAcademySetup.icon.src,
   },
   {
     id: "the-beauties",
     name: { en: "The Beauties", zh: "美少女们" },
     swatch: "#ec4899",
+    swatchDark: "#9d174d",
     iconSwatch: "#fdf2f8",
+    iconSwatchDark: "#1f0a14",
     iconUrl: theBeautiesSetup.icon.src,
   },
 ];

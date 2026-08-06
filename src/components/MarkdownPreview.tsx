@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
+import { MarkdownCode } from "@/lib/markdownCode";
 import { markdownRehypePlugins } from "@/lib/markdownRehype";
 import { normalizeDisplayMath } from "@/lib/markdown";
 import { cn } from "@/lib/utils";
@@ -100,35 +101,22 @@ function createSlideComponents(size: SlideSize) {
     }: {
       className?: string;
       children?: ReactNode;
-    }) => {
-      const isBlock = codeClassName?.includes("language-");
-      if (isBlock) {
-        return (
-          <code
-            className={cn(
-              "block overflow-x-auto rounded-lg bg-secondary p-3 font-mono",
-              isPreview ? "text-[10px]" : "text-sm sm:text-base",
-            )}
-          >
-            {children}
-          </code>
-        );
-      }
-      return (
-        <code
-          className={cn(
-            "rounded bg-secondary px-1 py-0.5 font-mono",
-            isPreview ? "text-[10px]" : "text-base",
-          )}
-        >
-          {children}
-        </code>
-      );
-    },
+    }) => (
+      <MarkdownCode
+        className={codeClassName}
+        blockClassName={isPreview ? "text-[10px]" : "text-sm sm:text-base"}
+        inlineClassName={cn(
+          "rounded bg-secondary px-1 py-0.5",
+          isPreview ? "text-[10px]" : "text-base",
+        )}
+      >
+        {children}
+      </MarkdownCode>
+    ),
     pre: ({ children }: { children?: ReactNode }) => (
       <pre
         className={cn(
-          "overflow-x-auto rounded-lg bg-secondary p-3 font-mono",
+          "slide-code-block overflow-x-auto rounded-lg bg-secondary p-3 text-left",
           isPreview ? "text-[10px]" : "text-sm sm:text-base",
         )}
       >
@@ -200,23 +188,17 @@ const documentComponents = {
   }: {
     className?: string;
     children?: ReactNode;
-  }) => {
-    const isBlock = codeClassName?.includes("language-");
-    if (isBlock) {
-      return (
-        <code className="block overflow-x-auto rounded-lg bg-secondary p-3 font-mono text-xs">
-          {children}
-        </code>
-      );
-    }
-    return (
-      <code className="rounded bg-secondary px-1 py-0.5 font-mono text-xs">
-        {children}
-      </code>
-    );
-  },
+  }) => (
+    <MarkdownCode
+      className={codeClassName}
+      blockClassName="text-xs"
+      inlineClassName="rounded bg-secondary px-1 py-0.5 text-xs"
+    >
+      {children}
+    </MarkdownCode>
+  ),
   pre: ({ children }: { children?: ReactNode }) => (
-    <pre className="overflow-x-auto rounded-lg bg-secondary p-3 font-mono text-xs">
+    <pre className="slide-code-block overflow-x-auto rounded-lg bg-secondary p-3 text-left text-xs">
       {children}
     </pre>
   ),

@@ -1,12 +1,13 @@
+import rehypeHighlight from "rehype-highlight";
 import rehypeKatex from "rehype-katex";
 import { rehypeKatexStripMathml } from "@/lib/rehypeKatexStripMathml";
 
 /**
- * Shared markdown → KaTeX pipeline.
- * Strip MathML after render (Safari scales native MathML to a fixed slot).
- * TeX is kept on `data-tex` for PDF export.
+ * Shared markdown → HTML pipeline.
+ * Highlight fenced code (```lang) before KaTeX; strip MathML after KaTeX.
  */
 export const markdownRehypePlugins = [
+  rehypeHighlight,
   rehypeKatex,
   rehypeKatexStripMathml,
 ] as const;

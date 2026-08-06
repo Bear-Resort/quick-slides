@@ -207,7 +207,7 @@ function BearResortDialog({
               onClick={onClose}
               aria-label={t.close}
               title={t.close}
-              className="shrink-0"
+              className="glass-close shrink-0"
               disabled={closing}
             >
               <X />

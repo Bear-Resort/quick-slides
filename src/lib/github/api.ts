@@ -26,9 +26,16 @@ export type GithubContentFile = {
   downloadUrl?: string | null;
 };
 
-function authHeaders(): HeadersInit {
+function authHeaders(requireAuth = true): HeadersInit {
   const token = getAccessToken();
-  if (!token) throw new Error("Not signed in to GitHub");
+  if (!token) {
+    if (requireAuth) throw new Error("Not signed in to GitHub");
+    return {
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": USER_AGENT,
+    };
+  }
   return {
     Accept: "application/vnd.github+json",
     Authorization: `Bearer ${token}`,
@@ -40,9 +47,10 @@ function authHeaders(): HeadersInit {
 async function githubFetch(
   path: string,
   init: RequestInit = {},
+  options?: { requireAuth?: boolean },
 ): Promise<Response> {
   const headers = new Headers();
-  const auth = authHeaders();
+  const auth = authHeaders(options?.requireAuth !== false);
   for (const [key, value] of Object.entries(auth)) {
     headers.set(key, value as string);
   }
@@ -136,13 +144,38 @@ export async function getAuthenticatedLogin(): Promise<string> {
 export async function tryGetRepo(
   owner: string,
   repo: string,
+  options?: { requireAuth?: boolean },
 ): Promise<GithubRepo | null> {
   const response = await githubFetch(
     `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+    {},
+    { requireAuth: options?.requireAuth !== false },
   );
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(await parseError(response));
   return mapRepo((await response.json()) as Parameters<typeof mapRepo>[0]);
+}
+
+/**
+ * Resolve a public repository by `owner/name` without requiring ownership.
+ * Requires sign-in so GitHub’s authenticated rate limit applies (pulling a
+ * full tree exceeds the anonymous 60/hour IP quota).
+ */
+export async function getPublicRepo(
+  owner: string,
+  repo: string,
+): Promise<GithubRepo> {
+  if (!getAccessToken()) {
+    throw new Error(
+      "Sign in with GitHub first. Opening a public repo still needs an authenticated API token for rate limits.",
+    );
+  }
+  const found = await tryGetRepo(owner, repo, { requireAuth: true });
+  if (!found) throw new Error("Repository not found or not public");
+  if (found.private) {
+    throw new Error("Only public repositories can be opened read-only");
+  }
+  return found;
 }
 
 /** Private monorepo for all Quick Slides decks (one folder per presentation). */
@@ -180,6 +213,8 @@ export async function getFileContent(
       .split("/")
       .map(encodeURIComponent)
       .join("/")}${query}`,
+    {},
+    { requireAuth: Boolean(getAccessToken()) },
   );
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(await parseError(response));
@@ -231,6 +266,8 @@ export async function fetchFileBytes(
   // Prefer Blobs API in the browser — raw.githubusercontent.com often fails CORS.
   const blobResponse = await githubFetch(
     `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/blobs/${encodeURIComponent(file.sha)}`,
+    {},
+    { requireAuth: Boolean(getAccessToken()) },
   );
   if (blobResponse.ok) {
     const blob = (await blobResponse.json()) as {
@@ -268,6 +305,7 @@ export async function fetchFileBytes(
     {
       headers: { Accept: "application/vnd.github.raw" },
     },
+    { requireAuth: Boolean(getAccessToken()) },
   );
   if (!rawResponse.ok) return null;
   return new Uint8Array(await rawResponse.arrayBuffer());
@@ -299,6 +337,8 @@ export async function listDirectory(
     : "";
   const response = await githubFetch(
     `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodedPath}${query}`,
+    {},
+    { requireAuth: Boolean(getAccessToken()) },
   );
   if (response.status === 404) return [];
   if (!response.ok) throw new Error(await parseError(response));

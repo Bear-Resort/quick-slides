@@ -8,7 +8,9 @@ import {
   RefreshCw,
   RotateCcw,
 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { getAuthStatus } from "@/lib/github/auth";
+import { useToast } from "@/components/ui/toaster";
 import {
   formatContentUpdateMessage,
   formatDeckGithubLinkLabel,
@@ -49,6 +51,9 @@ const copy = {
     forcePush: "Force push",
     forceConfirm:
       "Force push overwrites the remote with your local files. Continue?",
+    revertAll: "Revert all",
+    revertAllConfirm:
+      "Revert all local changes to match the remote? Local edits will be lost.",
     pull: "Pull",
     pullMerge: "Pull (take remote)",
     refresh: "Refresh",
@@ -67,6 +72,8 @@ const copy = {
     excludeAll: "Exclude all",
     pushIncluded: "Push included",
     noChanges: "No changes — working tree clean.",
+    toastError: "Error",
+    toastSuccess: "Done",
     statusLetter: {
       modified: "M",
       untracked: "N",
@@ -85,6 +92,8 @@ const copy = {
     quickPush: "一键推送全部",
     forcePush: "强制推送",
     forceConfirm: "强制推送会用本地文件覆盖远程，确定继续？",
+    revertAll: "全部还原",
+    revertAllConfirm: "将全部本地更改还原为远程版本？本地修改将丢失。",
     pull: "拉取",
     pullMerge: "拉取（采用远程）",
     refresh: "刷新",
@@ -102,6 +111,8 @@ const copy = {
     excludeAll: "全部取消",
     pushIncluded: "推送已纳入",
     noChanges: "没有更改 — 工作区干净。",
+    toastError: "错误",
+    toastSuccess: "完成",
     statusLetter: {
       modified: "M",
       untracked: "N",
@@ -133,14 +144,31 @@ export function DeckGitSection({
 }: DeckGitSectionProps) {
   const language = useLanguage();
   const t = copy[language];
+  const { toast } = useToast();
   const signedIn = getAuthStatus().signedIn;
   const [link, setLink] = useState<DeckGithubLink | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [scmChanges, setScmChanges] = useState<ScmFileChange[]>([]);
+  const [forceConfirmOpen, setForceConfirmOpen] = useState(false);
+  const [revertAllConfirmOpen, setRevertAllConfirmOpen] = useState(false);
+  const [revertPathConfirm, setRevertPathConfirm] = useState<string | null>(
+    null,
+  );
+
+  const showError = useCallback(
+    (description: string) => {
+      toast({ type: "error", title: t.toastError, description });
+    },
+    [toast, t.toastError],
+  );
+  const showInfo = useCallback(
+    (description: string) => {
+      toast({ type: "success", title: t.toastSuccess, description });
+    },
+    [toast, t.toastSuccess],
+  );
 
   const refreshScm = useCallback(async () => {
     if (!deckId || !deckHandle || !getDeckGithubLink(deckId)) {
@@ -156,14 +184,12 @@ export function DeckGitSection({
       });
       setScmChanges(changes);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      showError(err instanceof Error ? err.message : String(err));
     }
-  }, [deckId, deckHandle]);
+  }, [deckId, deckHandle, showError]);
 
   useEffect(() => {
     if (!active) return;
-    setError(null);
-    setInfo(null);
     setLink(deckId ? getDeckGithubLink(deckId) : null);
     void refreshScm();
   }, [active, deckId, refreshScm]);
@@ -180,8 +206,6 @@ export function DeckGitSection({
   }) => {
     if (!deckId || !deckHandle) return;
     setBusy(true);
-    setError(null);
-    setInfo(null);
     setConflict(false);
     try {
       const commitMessage = options.useTimestampMessage
@@ -195,15 +219,15 @@ export function DeckGitSection({
         force: options.force,
       });
       clearStaged(deckId);
-      setInfo(`${t.pushOk} (${commitMessage})`);
+      showInfo(`${t.pushOk} (${commitMessage})`);
       await refreshScm();
       onScmChanged?.();
     } catch (err) {
       if (err instanceof PushConflictError) {
         setConflict(true);
-        setError(`${t.conflictHint}\n${err.message}`);
+        showError(`${t.conflictHint}\n${err.message}`);
       } else {
-        setError(err instanceof Error ? err.message : String(err));
+        showError(err instanceof Error ? err.message : String(err));
       }
     } finally {
       setBusy(false);
@@ -222,7 +246,11 @@ export function DeckGitSection({
   };
 
   const handleForcePush = async () => {
-    if (!window.confirm(t.forceConfirm)) return;
+    setForceConfirmOpen(true);
+  };
+
+  const confirmForcePush = async () => {
+    setForceConfirmOpen(false);
     await runPush({
       force: true,
       useTimestampMessage: !message.trim(),
@@ -244,19 +272,50 @@ export function DeckGitSection({
   };
 
   const handleRevert = async (path: string) => {
-    if (!deckId || !deckHandle) return;
-    if (!window.confirm(`Revert “${path}”? Local changes will be lost.`)) return;
+    setRevertPathConfirm(path);
+  };
+
+  const confirmRevertPath = async () => {
+    const path = revertPathConfirm;
+    if (!path || !deckId || !deckHandle) return;
+    setRevertPathConfirm(null);
     setBusy(true);
-    setError(null);
     try {
       await revertFileFromRemote({ deckId, deckHandle, path });
       unstagePath(deckId, path);
       await refreshScm();
       onScmChanged?.();
       onOpenFile?.(path);
-      setInfo(`${t.revertFile}: ${path}`);
+      showInfo(`${t.revertFile}: ${path}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      showError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRevertAll = async () => {
+    setRevertAllConfirmOpen(true);
+  };
+
+  const confirmRevertAll = async () => {
+    if (!deckId || !deckHandle) return;
+    setRevertAllConfirmOpen(false);
+    setBusy(true);
+    try {
+      for (const change of scmChanges) {
+        await revertFileFromRemote({
+          deckId,
+          deckHandle,
+          path: change.path,
+        });
+        unstagePath(deckId, change.path);
+      }
+      await refreshScm();
+      onScmChanged?.();
+      showInfo(t.revertAll);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -265,17 +324,15 @@ export function DeckGitSection({
   const handlePull = async () => {
     if (!deckId || !deckHandle) return;
     setBusy(true);
-    setError(null);
-    setInfo(null);
     setConflict(false);
     try {
       const pulled = await pullDeckFromGithub({ deckId, deckHandle });
       onPulled?.(pulled);
-      setInfo(t.pullOk);
+      showInfo(t.pullOk);
       await refreshScm();
       onScmChanged?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      showError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -335,15 +392,6 @@ export function DeckGitSection({
           className="w-full rounded-md border border-white/15 bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
       </label>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => void handleQuickPush()}
-        className="glass-primary inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-50"
-      >
-        <ArrowUp className="size-3.5" aria-hidden />
-        {busy ? t.pushing : t.quickPush}
-      </button>
       <div className="flex gap-2">
         <button
           type="button"
@@ -376,25 +424,34 @@ export function DeckGitSection({
           <RefreshCw className="size-3.5" aria-hidden />
         </button>
       </div>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => void handleForcePush()}
-        className="glass-toolbar-action w-full rounded-lg border border-amber-500/40 px-3 py-1.5 text-[11px] font-semibold text-amber-800 disabled:opacity-50 dark:text-amber-300"
-      >
-        {t.forcePush}
-      </button>
-
-      {error ? (
-        <p className="whitespace-pre-wrap text-xs font-medium text-red-600 dark:text-red-400">
-          {error}
-        </p>
-      ) : null}
-      {info ? (
-        <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
-          {info}
-        </p>
-      ) : null}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void handleQuickPush()}
+          className="glass-primary inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-50"
+        >
+          <ArrowUp className="size-3.5" aria-hidden />
+          {busy ? t.pushing : t.quickPush}
+        </button>
+        <button
+          type="button"
+          disabled={busy || scmChanges.length === 0}
+          onClick={() => void handleRevertAll()}
+          className="glass-toolbar-action inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold disabled:opacity-50"
+        >
+          <RotateCcw className="size-3.5" aria-hidden />
+          {t.revertAll}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void handleForcePush()}
+          className="glass-toolbar-action inline-flex flex-1 items-center justify-center rounded-lg border border-amber-500/40 px-3 py-2 text-[11px] font-semibold text-amber-800 disabled:opacity-50 dark:text-amber-300"
+        >
+          {t.forcePush}
+        </button>
+      </div>
 
       {scmChanges.length === 0 ? (
         <p className="text-xs text-muted-foreground">{t.noChanges}</p>
@@ -508,6 +565,35 @@ export function DeckGitSection({
           })}
         </div>
       )}
+
+      <ConfirmDialog
+        open={forceConfirmOpen}
+        title={t.forcePush}
+        description={t.forceConfirm}
+        variant="danger"
+        onCancel={() => setForceConfirmOpen(false)}
+        onConfirm={() => void confirmForcePush()}
+      />
+      <ConfirmDialog
+        open={revertAllConfirmOpen}
+        title={t.revertAll}
+        description={t.revertAllConfirm}
+        variant="danger"
+        onCancel={() => setRevertAllConfirmOpen(false)}
+        onConfirm={() => void confirmRevertAll()}
+      />
+      <ConfirmDialog
+        open={revertPathConfirm !== null}
+        title={t.revertFile}
+        description={
+          revertPathConfirm
+            ? `Revert “${revertPathConfirm}”? Local changes will be lost.`
+            : undefined
+        }
+        variant="danger"
+        onCancel={() => setRevertPathConfirm(null)}
+        onConfirm={() => void confirmRevertPath()}
+      />
     </div>
   );
 }

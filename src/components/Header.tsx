@@ -1,5 +1,16 @@
-import { Files, GitBranch, Github, Loader2, Redo2, Save, Undo2 } from "lucide-react";
+import { useRef } from "react";
+import {
+  Files,
+  GitBranch,
+  Github,
+  Loader2,
+  Redo2,
+  Save,
+  Undo2,
+  type LucideIcon,
+} from "lucide-react";
 import { EnergySaveBadge } from "@/components/EnergySaveBadge";
+import { setPanelIconTrigger } from "@/components/FlyingTitleIcon";
 import { Return } from "@/components/Return";
 import { HelpButton, AiInstructionsButton } from "@/components/HelpDialog";
 import { Menu } from "@/components/Menu";
@@ -54,7 +65,7 @@ function ToolbarAction({
   disabled,
   loading,
 }: {
-  icon: typeof Files;
+  icon: LucideIcon;
   label: string;
   title: string;
   onClick: () => void;
@@ -62,10 +73,14 @@ function ToolbarAction({
   disabled?: boolean;
   loading?: boolean;
 }) {
+  const iconRef = useRef<SVGSVGElement>(null);
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => {
+        setPanelIconTrigger(iconRef.current);
+        onClick();
+      }}
       title={title}
       aria-label={label}
       aria-busy={loading || undefined}
@@ -76,7 +91,7 @@ function ToolbarAction({
       {loading ? (
         <Loader2 className="size-4 animate-spin" aria-hidden />
       ) : (
-        <Icon className="size-4" aria-hidden />
+        <Icon ref={iconRef} className="size-4" aria-hidden />
       )}
       <span className="text-[9px] font-medium leading-none">{label}</span>
     </button>
